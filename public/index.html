@@ -369,6 +369,11 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 .selfbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chk { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--ink); grid-column: 1 / -1; cursor: pointer; }
 .chk input { width: 18px; height: 18px; accent-color: var(--violet); }
+.teamgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.selfbox.perm.on { background: var(--green-soft); }
+.selfbox.perm.on .switch { background: var(--green); }
+.selfbox.static { cursor: default; }
+.perm-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
 
 .empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
@@ -529,6 +534,7 @@ const ICONS = {
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   chev: '<path d="m9 6 6 6-6 6"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.6 0 4.5 1.8 4.5 4.5"/>',
   client: '<circle cx="9" cy="7" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M18 8v6M15 11h6"/>',
 };
 function icon(name, size = 18, sw = 2) {
@@ -546,6 +552,30 @@ let view = "overview", period = "active", statFilter = null, query = "";
 let openId = null;
 let pending = [];
 const isAdmin = () => !!(me && USERS[me] && USERS[me].admin);
+let myCanUpload = false;
+let team = null;
+const canUpload = () => isAdmin() || myCanUpload;
+function updateRole() {
+  const u = USERS[me]; if (!u) return;
+  const role = $("#meRole");
+  role.className = "role" + (u.admin ? " admin" : "");
+  role.textContent = u.admin ? "Admin" : myCanUpload ? "Uživatel · nahrává" : "Uživatel";
+}
+async function refreshMe(notify) {
+  try {
+    const u = await api("GET", "me");
+    const before = myCanUpload;
+    myCanUpload = !!u.canUpload;
+    updateRole();
+    if (before !== myCanUpload) {
+      if (notify && !isAdmin()) toast(myCanUpload ? "Admin vám povolil nahrávání obsahu." : "Admin vám vypnul nahrávání obsahu.");
+      render();
+    }
+  } catch {}
+}
+async function loadTeam() {
+  try { team = await api("GET", "team"); render(); } catch (e) { toast(e.message); }
+}
 
 /* ---------- server API ---------- */
 async function api(method, path, body) {
@@ -578,7 +608,11 @@ async function poll() {
   try {
     const data = await api("GET", "rentals" + (dataVersion != null ? `?v=${dataVersion}` : ""));
     if (data.unchanged) setSync("live", "Synchronizováno");
-    else applyList(data);
+    else {
+      applyList(data);
+      if (!isAdmin()) refreshMe(true);
+      else if (view === "team") loadTeam();
+    }
   } catch {}
   polling = false;
 }
@@ -627,7 +661,7 @@ $("#pin").addEventListener("input", () => { if (pick && $("#pin").value.replace(
 $("#btnLogout").append(icon("logout", 18));
 function forceLogout(msg) {
   closeDrawer();
-  me = null; pick = null; docs = new Map(); dataVersion = null; renderWho();
+  me = null; pick = null; docs = new Map(); dataVersion = null; myCanUpload = false; team = null; view = "overview"; renderWho();
   $("#appView").hidden = true; $("#loginView").hidden = false;
   $("#loginErr").textContent = msg || "";
 }
@@ -641,11 +675,13 @@ function enterApp(id) {
   if (!u) { forceLogout("Neznámý uživatel."); return; }
   $("#meAv").textContent = initials(u.name); $("#meAv").style.setProperty("--c", u.color);
   $("#meName").textContent = u.name;
-  const role = $("#meRole"); role.className = "role" + (u.admin ? " admin" : ""); role.textContent = u.admin ? "Admin" : "Uživatel";
+  myCanUpload = !!u.admin;
+  updateRole();
   $("#loginView").hidden = true; $("#appView").hidden = false;
   if (!u.admin) { $("#importPanel").hidden = true; $("#addPanel").hidden = true; }
   render();
   dataVersion = null; poll();
+  refreshMe(false);
 }
 
 /* ---------- dates ---------- */
@@ -844,11 +880,13 @@ function renderSidebar(all) {
   const urgent = all.filter(isUrgent).length;
   const navItem = (id, ic, label, cnt, hot) => h("button", { type: "button", "aria-current": view === id ? "page" : null, onclick: () => { view = id; render(); } },
     icon(ic, 19), label, cnt != null ? h("span", { class: "cnt" + (hot ? " hot" : "") }, cnt) : null);
-  $("#nav").replaceChildren(
+  $("#nav").replaceChildren(...[
     h("div", { class: "nav-t" }, "Pracovní plocha"),
     navItem("overview", "grid", "Přehled", urgent || null, urgent > 0),
     navItem("list", "list", "Pronájmy", active.length),
-    navItem("calendar", "cal", "Kalendář", null));
+    navItem("calendar", "cal", "Kalendář", null),
+    isAdmin() ? navItem("team", "users", "Tým", null) : null,
+  ].filter(Boolean));
   const cta = $("#sideCta");
   cta.replaceChildren();
   if (isAdmin()) {
@@ -1043,6 +1081,41 @@ function renderCalendar(all) {
 }
 
 /* ---------- drawer ---------- */
+function renderTeam() {
+  const head = h("header", { class: "pagehead" },
+    h("div", null, h("p", { class: "eyebrow" }, "Tým"), h("h1", null, "Oprávnění týmu"),
+      h("p", null, "Zapněte, kdo kromě vás smí k pronájmům přidávat odkazy a nahrávat soubory.")));
+  const info = h("section", { class: "card" },
+    h("div", { class: "card-h" }, h("h3", null, icon("box", 19), "Co smí uživatel s povoleným nahráváním")),
+    h("ul", { class: "perm-list" },
+      h("li", null, "přidávat odkazy na obsah a nahrávat .txt soubory k pronájmům"),
+      h("li", null, "mazat jen odkazy a soubory, které sám nahrál"),
+      h("li", null, "import z NEXu, mazání pronájmů, poznámky a „Klient nahrává sám“ zůstávají jen adminovi")));
+  if (!team || !team.length) return [head, h("div", { class: "muted-empty" }, "Načítám tým…")];
+  const cards = team.map((u) => {
+    const av = h("span", { class: "av sm", style: `--c:${u.color}` }, initials(u.name));
+    if (u.admin) {
+      return h("div", { class: "selfbox perm on static" }, av,
+        h("div", null, h("strong", null, u.name), h("span", { class: "sub" }, "Admin · má všechna práva automaticky")));
+    }
+    const on = !!u.canUpload;
+    return h("button", { class: "selfbox perm" + (on ? " on" : ""), type: "button", role: "switch", "aria-checked": String(on),
+      "aria-label": `${u.name}: smí nahrávat obsah`,
+      onclick: async () => {
+        try {
+          team = await api("PUT", `team/${encodeURIComponent(u.id)}`, { canUpload: !on });
+          toast(on ? `${u.name} už nemůže nahrávat obsah.` : `${u.name} teď smí nahrávat obsah.`);
+          render();
+        } catch (e) { toast(e.message); }
+      } },
+      av,
+      h("div", null, h("strong", null, u.name),
+        h("span", { class: "sub" }, (on ? "Smí nahrávat obsah" : "Nahrávání zablokované") + (u.changedAt ? ` · změnil(a) ${who(u.changedBy)}, ${fmtStamp(u.changedAt)}` : ""))),
+      h("span", { class: "switch", "aria-hidden": "true" }));
+  });
+  return [head, h("div", { class: "teamgrid" }, cards), info];
+}
+
 let dr = null;
 function buildDrawer() {
   const url = h("input", { class: "in", id: "drUrl", placeholder: "Odkaz na Úschovnu, WeTransfer, Drive…", "aria-label": "Odkaz" });
@@ -1050,7 +1123,7 @@ function buildDrawer() {
   const form = h("form", { class: "addlink" }, url, label, h("button", { class: "btn primary", type: "submit" }, icon("plus", 16, 2.4), "Přidat"));
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (!isAdmin() || !openId) return;
+    if (!canUpload() || !openId) return;
     let u = url.value.trim(); if (!u) { url.focus(); return; }
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
     try { new URL(u); } catch { toast("Tohle nevypadá jako platný odkaz."); return; }
@@ -1086,7 +1159,7 @@ $("#backdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 
 function pickFile(file) {
-  if (!isAdmin() || !openId) return;
+  if (!canUpload() || !openId) return;
   if (!/\.txt$/i.test(file.name)) { toast("Nahrát jde jen textový soubor .txt."); return; }
   if (file.size > MAX_FILE_BYTES) { toast(`Soubor je moc velký (max ${MAX_FILE_BYTES / 1000} kB).`); return; }
   const reader = new FileReader();
@@ -1146,6 +1219,7 @@ function renderDrawer() {
   const r = { id: openId, ...r0 };
   const s = statusOf(r), d = daysUntil(r.eventDate), urgent = isUrgent(r), items = r.items || [];
   const admin = isAdmin() && !readOnly;
+  const uploader = canUpload() && !readOnly;
 
   const top = h("div", { class: "dr-top" },
     h("span", { class: "id" }, `Pronájem #${r.nexId}`),
@@ -1185,7 +1259,7 @@ function renderDrawer() {
             h("div", { class: "fa" },
               h("a", { class: "btn primary", href: `/api/files/${encodeURIComponent(f.id)}?inline=1`, target: "_blank", rel: "noopener" }, icon("ext", 15, 2.2), "Zobrazit"),
               h("a", { class: "btn ghost icon", href: `/api/files/${encodeURIComponent(f.id)}`, download: f.name, title: "Stáhnout", "aria-label": "Stáhnout soubor" }, icon("down", 16)),
-              admin ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat soubor", "aria-label": "Odebrat soubor",
+              admin || (uploader && f.by === me) ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat soubor", "aria-label": "Odebrat soubor",
                 onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/files/${encodeURIComponent(f.id)}`, undefined, "Soubor odebrán.") }, icon("trash", 16)) : null))),
           items.map((it) => {
           const p = provider(it.url);
@@ -1196,12 +1270,12 @@ function renderDrawer() {
             h("div", { class: "fa" },
               h("a", { class: "btn primary", href: it.url, target: "_blank", rel: "noopener noreferrer" }, icon("ext", 15, 2.2), "Otevřít"),
               h("button", { class: "btn ghost icon", type: "button", title: "Kopírovat odkaz", "aria-label": "Kopírovat odkaz", onclick: () => copy(it.url) }, icon("copy", 16)),
-              admin ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat odkaz", "aria-label": "Odebrat odkaz",
+              admin || (uploader && it.by === me) ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat odkaz", "aria-label": "Odebrat odkaz",
                 onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/items/${encodeURIComponent(it.id)}`) }, icon("trash", 16)) : null));
         }))
-      : h("div", { class: "empty-files" }, r.selfUpload ? "Klient si obsah nahrává sám, odkazy tu být nemusí." : admin ? "Zatím žádný obsah. Vložte odkaz, který poslal klient." : "Obsah zatím nebyl dodán. Jakmile ho admin vloží, objeví se tady."),
-    admin ? dr.form : null,
-    admin ? uploadUi() : null);
+      : h("div", { class: "empty-files" }, r.selfUpload ? "Klient si obsah nahrává sám, odkazy tu být nemusí." : uploader ? "Zatím žádný obsah. Vložte odkaz, který poslal klient." : "Obsah zatím nebyl dodán. Jakmile ho admin vloží, objeví se tady."),
+    uploader ? dr.form : null,
+    uploader ? uploadUi() : null);
 
   if (document.activeElement !== dr.note) dr.note.value = r.note || "";
   const noteSec = admin
@@ -1268,7 +1342,9 @@ async function render() {
   if (!isAdmin()) { $("#importPanel").hidden = true; $("#addPanel").hidden = true; }
   const v = $("#view");
   const hadFocus = document.activeElement && document.activeElement.id === "search";
-  const nodes = view === "overview" ? renderOverview(all) : view === "calendar" ? renderCalendar(all) : renderList(all);
+  if (view === "team" && !isAdmin()) view = "overview";
+  if (view === "team" && team === null) { team = []; loadTeam(); }
+  const nodes = view === "overview" ? renderOverview(all) : view === "calendar" ? renderCalendar(all) : view === "team" ? renderTeam() : renderList(all);
   v.replaceChildren(h("div", { style: "display:flex;flex-direction:column;gap:24px" }, nodes));
   if (hadFocus && $("#search")) { const s = $("#search"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
   renderDrawer();

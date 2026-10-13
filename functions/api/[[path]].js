@@ -52,7 +52,12 @@ async function currentUser(req, env) {
     .bind(await sha256hex(token)).first();
   if (!row || row.expires_at < Date.now()) return null;
   const u = users(env)[row.user_id];
-  return u ? { id: row.user_id, ...u } : null;
+  if (!u) return null;
+  const perm = u.admin ? null : await env.DB.prepare("SELECT can_upload FROM permissions WHERE user_id = ?").bind(row.user_id).first();
+  return { id: row.user_id, ...u, canUpload: !!u.admin || !!(perm && perm.can_upload) };
+}
+function meInfo(me) {
+  return { ...publicUser(me.id, me), canUpload: !!me.canUpload };
 }
 
 /* ---------- auth ---------- */
@@ -150,6 +155,14 @@ async function rentals(req, env, me, parts) {
   const method = req.method;
   const now = Date.now();
   const adminOnly = () => (me.admin ? null : fail(403, "Tohle může jen admin."));
+  const uploaderOnly = () => (me.canUpload ? null : fail(403, "Nahrávání obsahu vám admin zatím nepovolil."));
+  // Nahrávající uživatel smí mazat jen to, co sám přidal; admin cokoli.
+  const canRemove = async (table, rowId) => {
+    if (me.admin) return null;
+    if (!me.canUpload) return fail(403, "Nahrávání obsahu vám admin zatím nepovolil.");
+    const row = await env.DB.prepare(`SELECT created_by FROM ${table} WHERE id = ?`).bind(rowId).first();
+    return row && row.created_by === me.id ? null : fail(403, "Smazat můžete jen obsah, který jste nahrál(a) vy.");
+  };
 
   // GET /api/rentals[?v=N]
   if (parts.length === 0 && method === "GET") {
@@ -236,7 +249,7 @@ async function rentals(req, env, me, parts) {
 
   // POST /api/rentals/:id/items  { url, label }  nebo  { items: [{ url, label }, ...] }
   if (parts.length === 2 && parts[1] === "items" && method === "POST") {
-    const denied = adminOnly(); if (denied) return denied;
+    const denied = uploaderOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
     const list = Array.isArray(body.items) ? body.items.slice(0, 100) : [body];
     const stmts = [];
@@ -254,7 +267,7 @@ async function rentals(req, env, me, parts) {
 
   // POST /api/rentals/:id/files  { name, content }  — malý textový soubor
   if (parts.length === 2 && parts[1] === "files" && method === "POST") {
-    const denied = adminOnly(); if (denied) return denied;
+    const denied = uploaderOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
     const name = clean(body.name, 120).replace(/[\\/:*?"<>|\r\n]+/g, "_") || "soubor.txt";
     if (!/\.txt$/i.test(name)) return fail(400, "Nahrát jde jen textový soubor .txt.");
@@ -271,7 +284,7 @@ async function rentals(req, env, me, parts) {
 
   // DELETE /api/rentals/:id/files/:fileId
   if (parts.length === 3 && parts[1] === "files" && method === "DELETE") {
-    const denied = adminOnly(); if (denied) return denied;
+    const denied = await canRemove("files", parts[2]); if (denied) return denied;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM files WHERE id = ? AND rental_id = ?").bind(parts[2], id),
       touch, bump(env),
@@ -281,7 +294,7 @@ async function rentals(req, env, me, parts) {
 
   // DELETE /api/rentals/:id/items/:itemId
   if (parts.length === 3 && parts[1] === "items" && method === "DELETE") {
-    const denied = adminOnly(); if (denied) return denied;
+    const denied = await canRemove("items", parts[2]); if (denied) return denied;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM items WHERE id = ? AND rental_id = ?").bind(parts[2], id),
       touch, bump(env),
@@ -308,6 +321,43 @@ async function rentals(req, env, me, parts) {
     return json(await listRentals(env));
   }
 
+  return fail(404, "Neznámá adresa.");
+}
+
+/* ---------- team (oprávnění uživatelů) ---------- */
+async function teamList(env) {
+  const rows = (await env.DB.prepare("SELECT user_id, can_upload, updated_by, updated_at FROM permissions").all()).results;
+  const byId = new Map(rows.map((r) => [r.user_id, r]));
+  return Object.entries(users(env)).map(([id, u]) => {
+    const p = byId.get(id);
+    return {
+      ...publicUser(id, u),
+      canUpload: !!u.admin || !!(p && p.can_upload),
+      changedBy: p ? p.updated_by : null, changedAt: p ? p.updated_at : null,
+    };
+  });
+}
+
+async function team(req, env, me, parts) {
+  if (!me.admin) return fail(403, "Tohle může jen admin.");
+  // GET /api/team
+  if (parts.length === 0 && req.method === "GET") return json(await teamList(env));
+  // PUT /api/team/:userId  { canUpload }
+  if (parts.length === 1 && req.method === "PUT") {
+    const u = users(env)[parts[0]];
+    if (!u) return fail(404, "Neznámý uživatel.");
+    if (u.admin) return fail(400, "Admin má všechna práva automaticky.");
+    const body = await req.json().catch(() => ({}));
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO permissions (user_id, can_upload, updated_by, updated_at) VALUES (?, ?, ?, ?) " +
+        "ON CONFLICT(user_id) DO UPDATE SET can_upload = excluded.can_upload, updated_by = excluded.updated_by, updated_at = excluded.updated_at",
+      ).bind(parts[0], body.canUpload ? 1 : 0, me.id, now),
+      bump(env),
+    ]);
+    return json(await teamList(env));
+  }
   return fail(404, "Neznámá adresa.");
 }
 
@@ -347,7 +397,8 @@ export async function onRequest({ request: req, env, params }) {
 
     const me = await currentUser(req, env);
     if (!me) return fail(401, "Nejste přihlášen(a).");
-    if (route === "me" && method === "GET") return json(publicUser(me.id, me));
+    if (route === "me" && method === "GET") return json(meInfo(me));
+    if (parts[0] === "team") return await team(req, env, me, parts.slice(1));
     if (parts[0] === "rentals") return await rentals(req, env, me, parts.slice(1));
     if (parts[0] === "files" && parts.length === 2 && method === "GET") return await downloadFile(req, env, parts[1]);
     return fail(404, "Neznámá adresa.");
