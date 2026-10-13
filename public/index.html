@@ -23,6 +23,7 @@
   --red: #d92b4b; --red-soft: #fde8ed;
   --amber: #b46a00; --amber-soft: #fff0d6;
   --green: #0b8a5c; --green-soft: #dbf5ea;
+  --violet: #7a3fe0; --violet-soft: #efe6fd;
   --shadow-sm: 0 1px 2px rgba(12, 18, 48, .06);
   --shadow: 0 1px 2px rgba(12, 18, 48, .05), 0 14px 40px -18px rgba(12, 18, 48, .22);
   --shadow-lg: 0 30px 80px -20px rgba(12, 18, 48, .35);
@@ -37,6 +38,7 @@
     --ink: #e9edff; --muted: #98a2c6; --accent: #7690ff; --accent-2: #3ddba6; --accent-soft: #1b2659; --accent-ink: #080c1d;
     --hero-bg: #0e1640; --hero-ink: #f2f5ff; --hero-muted: #a7b1d9;
     --red: #ff7d92; --red-soft: #3c1725; --amber: #ffc066; --amber-soft: #392a10; --green: #4ad9a2; --green-soft: #0e3427;
+    --violet: #b996ff; --violet-soft: #2a1d52;
     --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
     --shadow: 0 1px 2px rgba(0,0,0,.35), 0 14px 40px -18px rgba(0,0,0,.7);
     --shadow-lg: 0 30px 80px -20px rgba(0,0,0,.8);
@@ -49,6 +51,7 @@
   --ink: #e9edff; --muted: #98a2c6; --accent: #7690ff; --accent-2: #3ddba6; --accent-soft: #1b2659; --accent-ink: #080c1d;
   --hero-bg: #0e1640; --hero-ink: #f2f5ff; --hero-muted: #a7b1d9;
   --red: #ff7d92; --red-soft: #3c1725; --amber: #ffc066; --amber-soft: #392a10; --green: #4ad9a2; --green-soft: #0e3427;
+    --violet: #b996ff; --violet-soft: #2a1d52;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
   --shadow: 0 1px 2px rgba(0,0,0,.35), 0 14px 40px -18px rgba(0,0,0,.7);
   --shadow-lg: 0 30px 80px -20px rgba(0,0,0,.8);
@@ -345,6 +348,20 @@ dl.info dt { color: var(--muted); }
 dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: flex; flex-direction: column; gap: 4px; }
 .cline { display: flex; align-items: center; gap: 6px; }
 .cline .btn { padding: 3px; color: var(--muted); }
+.selfbox { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; color: var(--ink); width: 100%; }
+.selfbox.on { background: var(--violet-soft); border-color: transparent; }
+.selfbox .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--violet-soft); color: var(--violet); flex: none; }
+.selfbox.on .ic { background: var(--violet); color: var(--surface); }
+.selfbox div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.selfbox strong { font-weight: 700; }
+.selfbox span.sub { font-size: 13px; color: var(--muted); }
+.switch { width: 46px; height: 28px; border-radius: 99px; background: var(--line); position: relative; flex: none; transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .15s; }
+.selfbox.on .switch { background: var(--violet); }
+.selfbox.on .switch::after { transform: translateX(18px); }
+.selfbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chk { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--ink); grid-column: 1 / -1; cursor: pointer; }
+.chk input { width: 18px; height: 18px; accent-color: var(--violet); }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
 
 .empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
@@ -455,6 +472,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
         <label class="fld">Datum akce *<input class="in" id="fDate" type="date" required></label>
         <label class="fld">Kontaktní osoba<input class="in" id="fContact" placeholder="jméno, telefon, e-mail"></label>
         <label class="fld">Adresa místa akce<input class="in" id="fAddress"></label>
+        <label class="chk"><input type="checkbox" id="fSelf"> Klient si nahrává obsah sám</label>
         <div class="row-actions" style="grid-column: 1 / -1">
           <button class="btn primary" type="submit">Přidat pronájem</button>
           <button class="btn ghost" type="button" id="btnAddCancel">Zavřít</button>
@@ -504,6 +522,7 @@ const ICONS = {
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   chev: '<path d="m9 6 6 6-6 6"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  client: '<circle cx="9" cy="7" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M18 8v6M15 11h6"/>',
 };
 function icon(name, size = 18, sw = 2) {
   const s = document.createElement("span");
@@ -654,13 +673,14 @@ function rel(n) {
 function plural(n, one, few, many) { return n === 1 ? one : n > 1 && n < 5 ? few : many; }
 
 /* ---------- status ---------- */
-function statusOf(r) { if (r.confirmed) return "done"; return (r.items || []).length ? "waiting" : "missing"; }
+function statusOf(r) { if (r.confirmed) return "done"; if (r.selfUpload) return "self"; return (r.items || []).length ? "waiting" : "missing"; }
 const ST = {
   missing: { label: "Chybí obsah", k: "var(--red)", ks: "var(--red-soft)" },
   waiting: { label: "Čeká na nahrání", k: "var(--amber)", ks: "var(--amber-soft)" },
+  self: { label: "Nahrává klient", k: "var(--violet)", ks: "var(--violet-soft)" },
   done: { label: "Na panelech", k: "var(--green)", ks: "var(--green-soft)" },
 };
-function isUrgent(r) { const d = daysUntil(r.eventDate); return statusOf(r) !== "done" && d != null && d <= URGENT_DAYS && d >= -1; }
+function isUrgent(r) { const d = daysUntil(r.eventDate); const s = statusOf(r); return s !== "done" && s !== "self" && d != null && d <= URGENT_DAYS && d >= -1; }
 function isPast(r) { const d = daysUntil(r.eventDate); return d != null && d < -1; }
 function pill(s) { return h("span", { class: "pill", style: `--k:${ST[s].k};--ks:${ST[s].ks}` }, ST[s].label); }
 function calTile(r) {
@@ -670,9 +690,9 @@ function calTile(r) {
     h("span", { class: "m" }, mm ? MONTHS[+mm - 1] : "—"), h("span", { class: "dd" }, dd ? +dd : "?"), h("span", { class: "rl" }, rel(d)));
 }
 function track(r) {
-  const s = statusOf(r), lvl = s === "missing" ? 0 : s === "waiting" ? 1 : 2;
+  const s = statusOf(r), lvl = s === "missing" ? 0 : s === "done" ? 2 : 1;
   return h("div", { class: "track", style: `--k:${ST[s].k};--ks:${ST[s].ks}` },
-    ["Pronájem", "Obsah dodán", "Na panelech"].map((t, i) =>
+    ["Pronájem", r.selfUpload ? "Nahrává klient" : "Obsah dodán", "Na panelech"].map((t, i) =>
       h("div", { class: "step" + (i <= lvl ? " on" : "") + (i === lvl ? " cur" : "") }, h("i", null, i < lvl || s === "done" ? "✓" : ""), t)));
 }
 function who(id) { return (USERS[id] && USERS[id].name) || "Někdo"; }
@@ -817,16 +837,17 @@ function renderOverview(all) {
   const active = all.filter((r) => !isPast(r));
   const week = all.filter((r) => { const d = daysUntil(r.eventDate); return d != null && d >= 0 && d <= 7; });
   const wDone = week.filter((r) => statusOf(r) === "done").length;
+  const wSelf = week.filter((r) => statusOf(r) === "self").length;
   const wWait = week.filter((r) => statusOf(r) === "waiting").length;
-  const wMiss = week.length - wDone - wWait;
-  const pct = week.length ? Math.round((wDone / week.length) * 100) : null;
+  const wMiss = week.length - wDone - wSelf - wWait;
+  const pct = week.length ? Math.round(((wDone + wSelf) / week.length) * 100) : null;
   const urgent = all.filter(isUrgent).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   const next = active.filter((r) => daysUntil(r.eventDate) >= 0).sort((a, b) => a.eventDate.localeCompare(b.eventDate))[0];
 
   const C = 2 * Math.PI * 62;
   const seg = (n, off, color) => week.length && n ? `<circle cx="75" cy="75" r="62" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="butt" stroke-dasharray="${(n / week.length) * C} ${C}" stroke-dashoffset="${-off * C / week.length}"/>` : "";
   const ring = h("div", { class: "ring" });
-  ring.innerHTML = `<svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true"><circle cx="75" cy="75" r="62" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="14"/>${seg(wDone, 0, "#4ad9a2")}${seg(wWait, wDone, "#ffc066")}${seg(wMiss, wDone + wWait, "#ff7d92")}</svg>`;
+  ring.innerHTML = `<svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true"><circle cx="75" cy="75" r="62" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="14"/>${seg(wDone, 0, "#4ad9a2")}${seg(wSelf, wDone, "#b996ff")}${seg(wWait, wDone + wSelf, "#ffc066")}${seg(wMiss, wDone + wSelf + wWait, "#ff7d92")}</svg>`;
   ring.append(h("div", { class: "lbl" }, h("b", null, pct == null ? "—" : `${pct} %`), h("span", null, "připraveno")));
 
   const hero = h("section", { class: "hero" },
@@ -834,9 +855,10 @@ function renderOverview(all) {
     ring,
     h("div", null,
       h("h2", null, "Příštích 7 dní"),
-      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech.` : "V příštím týdnu nejsou žádné akce."),
+      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech${wSelf ? `, ${wSelf} si nahrává klient sám` : ""}.` : "V příštím týdnu nejsou žádné akce."),
       h("div", { class: "legend" },
         h("span", null, h("i", { style: "background:#4ad9a2" }), `Na panelech ${wDone}`),
+        h("span", null, h("i", { style: "background:#b996ff" }), `Klient ${wSelf}`),
         h("span", null, h("i", { style: "background:#ffc066" }), `Čeká ${wWait}`),
         h("span", null, h("i", { style: "background:#ff7d92" }), `Chybí ${wMiss}`))),
     next
@@ -899,6 +921,7 @@ const PERIODS = [
 const SFILTERS = [
   { id: "missing", label: "Chybí obsah", k: "var(--red)", ks: "var(--red-soft)", test: (r) => statusOf(r) === "missing" },
   { id: "waiting", label: "Čeká na nahrání", k: "var(--amber)", ks: "var(--amber-soft)", test: (r) => statusOf(r) === "waiting" },
+  { id: "self", label: "Nahrává klient", k: "var(--violet)", ks: "var(--violet-soft)", test: (r) => statusOf(r) === "self" },
   { id: "done", label: "Na panelech", k: "var(--green)", ks: "var(--green-soft)", test: (r) => statusOf(r) === "done" },
   { id: "urgent", label: "Blíží se termín", k: "var(--accent)", ks: "var(--accent-soft)", test: isUrgent },
 ];
@@ -959,7 +982,7 @@ function fillTickets(el, shown) {
       h("div", { class: "ttl" },
         h("span", { class: "id" }, `#${r.nexId}`, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
         h("strong", null, r.event || "Bez názvu akce"),
-        h("span", null, r.customer + (items.length ? ` · ${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : ""))),
+        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : items.length ? ` · ${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : ""))),
       h("div", { class: "provs" }, provs.map((p) => h("span", { class: "pv", style: `--pc:${p.color}`, title: p.name }, p.ab))),
       track(r),
       h("span", { class: "chev" }, icon("chev", 20))));
@@ -1050,6 +1073,22 @@ function renderDrawer() {
       h("span", { class: "fact" + (d != null && d >= 0 && d <= URGENT_DAYS ? " soon" : "") }, icon("cal", 15), fmtDate(r.eventDate), d != null ? ` · ${rel(d)}` : ""),
       r.address ? h("span", { class: "fact" }, icon("pin", 15), r.address) : null));
 
+  let selfSec = null;
+  if (admin) {
+    const on = !!r.selfUpload;
+    selfSec = h("button", { class: "selfbox" + (on ? " on" : ""), type: "button", role: "switch", "aria-checked": String(on),
+      onclick: () => mutate("PATCH", `rentals/${encodeURIComponent(r.id)}`, { selfUpload: !on }, on ? "Obsah zase dodáváme my." : "Označeno: klient si nahrává obsah sám.") },
+      h("span", { class: "ic" }, icon("client", 20)),
+      h("div", null, h("strong", null, "Klient si nahrává obsah sám"),
+        h("span", { class: "sub" }, on ? `Zapnul(a) ${who(r.selfUpload.by)}, ${fmtStamp(r.selfUpload.at)}` : "Zapněte, když obsah na panely nedodáváme my.")),
+      h("span", { class: "switch", "aria-hidden": "true" }));
+  } else if (r.selfUpload) {
+    selfSec = h("div", { class: "selfbox on", style: "cursor:default" },
+      h("span", { class: "ic" }, icon("client", 20)),
+      h("div", null, h("strong", null, "Klient si nahrává obsah sám"),
+        h("span", { class: "sub" }, `Nastavil(a) ${who(r.selfUpload.by)}, ${fmtStamp(r.selfUpload.at)}. Odkazy dodávat nemusíme.`)));
+  }
+
   const files = h("section", null,
     h("p", { class: "sec-t" }, h("span", null, "Obsah ke stažení"), h("span", null, items.length ? `${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : "")),
     items.length
@@ -1065,7 +1104,7 @@ function renderDrawer() {
               admin ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat odkaz", "aria-label": "Odebrat odkaz",
                 onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/items/${encodeURIComponent(it.id)}`) }, icon("trash", 16)) : null));
         }))
-      : h("div", { class: "empty-files" }, admin ? "Zatím žádný obsah. Vložte odkaz, který poslal klient." : "Obsah zatím nebyl dodán. Jakmile ho admin vloží, objeví se tady."),
+      : h("div", { class: "empty-files" }, r.selfUpload ? "Klient si obsah nahrává sám, odkazy tu být nemusí." : admin ? "Zatím žádný obsah. Vložte odkaz, který poslal klient." : "Obsah zatím nebyl dodán. Jakmile ho admin vloží, objeví se tady."),
     admin ? dr.form : null);
 
   if (document.activeElement !== dr.note) dr.note.value = r.note || "";
@@ -1083,7 +1122,9 @@ function renderDrawer() {
     dr.justConfirmed = false;
   } else {
     confirm = h("section", { class: "confirm" },
-      h("p", null, items.length
+      h("p", null, r.selfUpload
+        ? "Klient si obsah nahrává sám. Až ho uvidíte na panelech, můžete to potvrdit."
+        : items.length
         ? (urgent ? `Akce je ${rel(d)}. Po nahrání obsahu na panely to prosím potvrďte.` : "Po nahrání obsahu na panely to potvrďte tímto tlačítkem.")
         : "Obsah zatím chybí. Potvrdit jde i tak, pokud dorazil jinou cestou."),
       h("button", { class: "btn go" + (urgent && items.length ? " blink" : ""), type: "button", disabled: readOnly,
@@ -1114,7 +1155,7 @@ function renderDrawer() {
   const scroller = drawer.querySelector(".dr-body");
   const scrollTop = scroller ? scroller.scrollTop : 0;
   drawer.replaceChildren(top, h("div", { class: "dr-body" },
-    title, h("div", { class: "dr-track" }, track(r)), confirm, files, noteSec, info, danger));
+    title, h("div", { class: "dr-track" }, track(r)), selfSec, confirm, files, noteSec, info, danger));
   drawer.querySelector(".dr-body").scrollTop = scrollTop;
 }
 
@@ -1161,6 +1202,7 @@ $("#addForm").addEventListener("submit", async (e) => {
   const res = await mutate("POST", "rentals", {
     nexId: id, customer: $("#fCustomer").value.trim(), contact: $("#fContact").value.trim(),
     event: $("#fEvent").value.trim(), eventDate: $("#fDate").value, address: $("#fAddress").value.trim(),
+    selfUpload: $("#fSelf").checked,
   });
   if (!res) return;
   e.target.reset(); $("#addPanel").hidden = true; toast(`Pronájem ${id} přidán.`);

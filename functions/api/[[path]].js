@@ -125,6 +125,7 @@ async function listRentals(env) {
       event: r.event, eventDate: r.event_date, address: r.address, note: r.note,
       items: byRental.get(r.id) || [],
       confirmed: r.confirmed_at ? { by: r.confirmed_by, at: r.confirmed_at } : null,
+      selfUpload: r.self_upload ? { by: r.self_by, at: r.self_at } : null,
       createdBy: r.created_by, createdAt: r.created_at,
     })),
   };
@@ -178,11 +179,12 @@ async function rentals(req, env, me, parts) {
     const id = String(r.nexId || "");
     if (!ID_RE.test(id)) return fail(400, "ID může obsahovat jen písmena, čísla, - a _.");
     if (await env.DB.prepare("SELECT 1 FROM rentals WHERE id = ?").bind(id).first()) return fail(409, `Pronájem ${id} už existuje.`);
+    const self = r.selfUpload ? 1 : 0;
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).bind(id, ...rentalFields(r), me.id, now, now),
+        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at, " +
+        "self_upload, self_by, self_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(id, ...rentalFields(r), me.id, now, now, self, self ? me.id : null, self ? now : null),
       bump(env),
     ]);
     return json(await listRentals(env), 201);
@@ -205,14 +207,21 @@ async function rentals(req, env, me, parts) {
     return json(await listRentals(env));
   }
 
-  // PATCH /api/rentals/:id  { note }
+  // PATCH /api/rentals/:id  { note?, selfUpload? }
   if (parts.length === 1 && method === "PATCH") {
     const denied = adminOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
-    await env.DB.batch([
-      env.DB.prepare("UPDATE rentals SET note = ?, updated_at = ? WHERE id = ?").bind(clean(body.note, 4000), now, id),
-      bump(env),
-    ]);
+    const stmts = [];
+    if ("note" in body) {
+      stmts.push(env.DB.prepare("UPDATE rentals SET note = ?, updated_at = ? WHERE id = ?").bind(clean(body.note, 4000), now, id));
+    }
+    if ("selfUpload" in body) {
+      stmts.push(body.selfUpload
+        ? env.DB.prepare("UPDATE rentals SET self_upload = 1, self_by = ?, self_at = ?, updated_at = ? WHERE id = ?").bind(me.id, now, now, id)
+        : env.DB.prepare("UPDATE rentals SET self_upload = 0, self_by = NULL, self_at = NULL, updated_at = ? WHERE id = ?").bind(now, id));
+    }
+    if (!stmts.length) return fail(400, "Není co změnit.");
+    await env.DB.batch([...stmts, bump(env)]);
     return json(await listRentals(env));
   }
 
