@@ -385,6 +385,13 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 .tnote-in { min-height: 46px; resize: vertical; }
 .tnote-hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 @media (max-width: 900px) { .tnote-form { grid-template-columns: 1fr; } }
+.hero-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.hero-h h2 { margin: 0; }
+.hseg { display: inline-flex; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 10px; padding: 3px; gap: 2px; }
+.hseg button { border: 0; background: transparent; color: var(--hero-muted); font: 600 12px/1 var(--f-body); padding: 6px 11px; border-radius: 7px; cursor: pointer; }
+.hseg button:hover { color: var(--hero-ink); }
+.hseg button[aria-pressed="true"] { background: #ffffff; color: #0b1130; }
+.mini .urg { margin-top: 2px; }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
 
 .empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
@@ -518,6 +525,14 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 let USERS = {};
 const URGENT_DAYS = 3;
 const POLL_MS = 10000;
+const HORIZON_KEY = "obsahy.horizon";
+let horizon = 14;
+try { const v = Number(localStorage.getItem(HORIZON_KEY)); if (v === 7 || v === 14) horizon = v; } catch {}
+function setHorizon(v) {
+  horizon = v;
+  try { localStorage.setItem(HORIZON_KEY, String(v)); } catch {}
+  render();
+}
 const NEX_FIELDS = ["nexId", "reported", "customer", "contact", "event", "eventDate", "address"];
 const MONTHS = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
 const WEEKDAYS = ["ne", "po", "út", "st", "čt", "pá", "so"];
@@ -918,7 +933,7 @@ function greeting() { const hr = new Date().getHours(); return hr < 10 ? "Dobré
 
 function renderOverview(all) {
   const active = all.filter((r) => !isPast(r));
-  const week = all.filter((r) => { const d = daysUntil(r.eventDate); return d != null && d >= 0 && d <= 7; });
+  const week = all.filter((r) => { const d = daysUntil(r.eventDate); return d != null && d >= 0 && d < horizon; });
   const wDone = week.filter((r) => statusOf(r) === "done").length;
   const wSelf = week.filter((r) => statusOf(r) === "self").length;
   const wWait = week.filter((r) => statusOf(r) === "waiting").length;
@@ -937,8 +952,11 @@ function renderOverview(all) {
     h("span", { class: "glow a" }), h("span", { class: "glow b" }),
     ring,
     h("div", null,
-      h("h2", null, "Příštích 7 dní"),
-      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech${wSelf ? `, ${wSelf} si nahrává klient sám` : ""}.` : "V příštím týdnu nejsou žádné akce."),
+      h("div", { class: "hero-h" },
+        h("h2", null, `Příštích ${horizon} dní`),
+        h("div", { class: "hseg", role: "group", "aria-label": "Období přehledu" },
+          [7, 14].map((v) => h("button", { type: "button", "aria-pressed": String(horizon === v), onclick: () => setHorizon(v) }, `${v} dní`)))),
+      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech${wSelf ? `, ${wSelf} si nahrává klient sám` : ""}.` : `V příštích ${horizon} dnech nejsou žádné akce.`),
       h("div", { class: "legend" },
         h("span", null, h("i", { style: "background:#4ad9a2" }), `Na panelech ${wDone}`),
         h("span", null, h("i", { style: "background:#b996ff" }), `Klient ${wSelf}`),
@@ -964,13 +982,19 @@ function renderOverview(all) {
     h("span", { class: "l" }, s.label), h("span", { class: "d" }, s.d),
     h("span", { class: "bar" }, h("i", { style: `width:${active.length ? (s.n / active.length) * 100 : 0}%` })))));
 
+  const need = week.filter((r) => { const st = statusOf(r); return st === "missing" || st === "waiting"; })
+    .sort((a, b) => a.eventDate.localeCompare(b.eventDate) || Number(a.nexId) - Number(b.nexId));
   const attention = h("section", { class: "card" },
-    h("div", { class: "card-h" }, h("h3", null, icon("alert", 19), "Vyžaduje pozornost"),
-      h("button", { class: "btn ghost", type: "button", onclick: () => { view = "list"; statFilter = "urgent"; render(); } }, "Vše", icon("chev", 16))),
-    urgent.length
-      ? h("div", { class: "mini" }, urgent.slice(0, 6).map((r) => h("button", { type: "button", onclick: () => openDrawer(r.id) },
-          calTile(r), h("div", { class: "t" }, h("strong", null, r.event || "Bez názvu akce"), h("span", null, `#${r.nexId} · ${r.customer}`)), pill(statusOf(r)))))
-      : h("div", { class: "muted-empty" }, "Nic nehoří. Všechny akce v nejbližších dnech jsou připravené."));
+    h("div", { class: "card-h" }, h("h3", null, icon("alert", 19), `Vyžaduje pozornost · ${horizon} dní`),
+      h("button", { class: "btn ghost", type: "button", onclick: () => { view = "list"; statFilter = null; period = "active"; render(); } }, "Vše", icon("chev", 16))),
+    need.length
+      ? [h("div", { class: "mini" }, need.slice(0, 8).map((r) => h("button", { type: "button", onclick: () => openDrawer(r.id) },
+          calTile(r),
+          h("div", { class: "t" }, h("strong", null, r.event || "Bez názvu akce"), h("span", null, `#${r.nexId} · ${r.customer}`),
+            isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
+          pill(statusOf(r))))),
+         need.length > 8 ? h("p", { style: "margin:0;font-size:13px;color:var(--muted)" }, `a dalších ${need.length - 8} v seznamu Pronájmy`) : null]
+      : h("div", { class: "muted-empty" }, `Nic nehoří. Všechny akce v příštích ${horizon} dnech jsou připravené.`));
 
   const acts = [];
   for (const r of all) {
