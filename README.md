@@ -47,6 +47,10 @@ Aplikace pak běží na http://localhost:8788.
 
 ## Nasazení na Cloudflare (jednorázově)
 
+> Na Windows, kde PowerShell blokuje skripty, pište místo `npx` příkaz `npx.cmd`.
+
+Aplikace běží na **https://obsahy-pronajmu.pages.dev**.
+
 1. `npx wrangler login`
 2. `npx wrangler d1 create obsahy-pronajmu` a vrácené `database_id` vložit do `wrangler.toml`
 3. `npx wrangler d1 migrations apply obsahy-pronajmu --remote`

@@ -5,6 +5,5 @@ compatibility_date = "2025-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "obsahy-pronajmu"
-# Doplní se po vytvoření databáze příkazem: npx wrangler d1 create obsahy-pronajmu
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "872dab48-dea9-4b5c-82ae-26d2df926014"
 migrations_dir = "migrations"
