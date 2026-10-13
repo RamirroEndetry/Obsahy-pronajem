@@ -272,8 +272,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* ---------- calendar ---------- */
-.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 8px; }
-.day { background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 260px; }
+.weeks { display: flex; flex-direction: column; gap: 22px; }
+.week-t { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; font: 700 18px/1.2 var(--f-display); }
+.week-t span { font: 600 12px var(--f-mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.board { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+.day.past { opacity: .55; }
+.day.past:hover { opacity: 1; }
+.day { background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 200px; }
 .day.today { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
 .day.weekend { background: var(--surface-2); }
 .day-h { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 8px; border-bottom: 1px solid var(--line); }
@@ -387,6 +392,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 @media (max-width: 900px) { .tnote-form { grid-template-columns: 1fr; } }
 .hero-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .hero-h h2 { margin: 0; }
+.hero-range { font: 600 12px var(--f-mono); letter-spacing: .06em; color: var(--hero-muted); margin: -2px 0 8px; }
 .hseg { display: inline-flex; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 10px; padding: 3px; gap: 2px; }
 .hseg button { border: 0; background: transparent; color: var(--hero-muted); font: 600 12px/1 var(--f-body); padding: 6px 11px; border-radius: 7px; cursor: pointer; }
 .hseg button:hover { color: var(--hero-ink); }
@@ -722,6 +728,13 @@ function daysUntil(iso) {
   const t = new Date();
   return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5);
 }
+function weekRange(weeks) {
+  const t = new Date();
+  const mon = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7));
+  const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 7 * weeks - 1);
+  return { mon, sun, from: isoOf(mon), to: isoOf(sun) };
+}
+function fmtShort(d) { return `${d.getDate()}. ${d.getMonth() + 1}.`; }
 function fmtDate(iso) { if (!iso) return "—"; const [y, m, d] = iso.split("-"); return `${+d}. ${+m}. ${y}`; }
 function fmtStamp(ts) { if (!ts) return ""; const d = new Date(ts); return `${d.getDate()}. ${d.getMonth() + 1}. v ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function ago(ts) {
@@ -933,7 +946,9 @@ function greeting() { const hr = new Date().getHours(); return hr < 10 ? "Dobré
 
 function renderOverview(all) {
   const active = all.filter((r) => !isPast(r));
-  const week = all.filter((r) => { const d = daysUntil(r.eventDate); return d != null && d >= 0 && d < horizon; });
+  const wr = weekRange(horizon === 7 ? 1 : 2);
+  const week = all.filter((r) => r.eventDate && r.eventDate >= wr.from && r.eventDate <= wr.to);
+  const rangeName = horizon === 7 ? "Tento týden" : "Tento a příští týden";
   const wDone = week.filter((r) => statusOf(r) === "done").length;
   const wSelf = week.filter((r) => statusOf(r) === "self").length;
   const wWait = week.filter((r) => statusOf(r) === "waiting").length;
@@ -953,10 +968,11 @@ function renderOverview(all) {
     ring,
     h("div", null,
       h("div", { class: "hero-h" },
-        h("h2", null, `Příštích ${horizon} dní`),
+        h("h2", null, rangeName),
         h("div", { class: "hseg", role: "group", "aria-label": "Období přehledu" },
-          [7, 14].map((v) => h("button", { type: "button", "aria-pressed": String(horizon === v), onclick: () => setHorizon(v) }, `${v} dní`)))),
-      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech${wSelf ? `, ${wSelf} si nahrává klient sám` : ""}.` : `V příštích ${horizon} dnech nejsou žádné akce.`),
+          [[7, "Tento týden"], [14, "2 týdny"]].map(([v, l]) => h("button", { type: "button", "aria-pressed": String(horizon === v), onclick: () => setHorizon(v) }, l)))),
+      h("p", { class: "hero-range" }, `Po ${fmtShort(wr.mon)} – Ne ${fmtShort(wr.sun)}`),
+      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech${wSelf ? `, ${wSelf} si nahrává klient sám` : ""}.` : (horizon === 7 ? "Tento týden nejsou žádné akce." : "Tento a příští týden nejsou žádné akce.")),
       h("div", { class: "legend" },
         h("span", null, h("i", { style: "background:#4ad9a2" }), `Na panelech ${wDone}`),
         h("span", null, h("i", { style: "background:#b996ff" }), `Klient ${wSelf}`),
@@ -985,7 +1001,7 @@ function renderOverview(all) {
   const need = week.filter((r) => { const st = statusOf(r); return st === "missing" || st === "waiting"; })
     .sort((a, b) => a.eventDate.localeCompare(b.eventDate) || Number(a.nexId) - Number(b.nexId));
   const attention = h("section", { class: "card" },
-    h("div", { class: "card-h" }, h("h3", null, icon("alert", 19), `Vyžaduje pozornost · ${horizon} dní`),
+    h("div", { class: "card-h" }, h("h3", null, icon("alert", 19), `Vyžaduje pozornost · ${horizon === 7 ? "tento týden" : "2 týdny"}`),
       h("button", { class: "btn ghost", type: "button", onclick: () => { view = "list"; statFilter = null; period = "active"; render(); } }, "Vše", icon("chev", 16))),
     need.length
       ? [h("div", { class: "mini" }, need.slice(0, 8).map((r) => h("button", { type: "button", onclick: () => openDrawer(r.id) },
@@ -994,7 +1010,7 @@ function renderOverview(all) {
             isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
           pill(statusOf(r))))),
          need.length > 8 ? h("p", { style: "margin:0;font-size:13px;color:var(--muted)" }, `a dalších ${need.length - 8} v seznamu Pronájmy`) : null]
-      : h("div", { class: "muted-empty" }, `Nic nehoří. Všechny akce v příštích ${horizon} dnech jsou připravené.`));
+      : h("div", { class: "muted-empty" }, horizon === 7 ? "Nic nehoří. Všechny akce tento týden jsou připravené." : "Nic nehoří. Všechny akce v tomto a příštím týdnu jsou připravené."));
 
   const acts = [];
   for (const r of all) {
@@ -1099,25 +1115,32 @@ function fillTickets(el, shown) {
 }
 
 function renderCalendar(all) {
-  const days = [];
-  const t = new Date();
-  for (let i = 0; i < 14; i++) { const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i); days.push(d); }
-  const board = h("div", { class: "board" }, days.map((d, i) => {
+  const wr = weekRange(2);
+  const todayIso = isoOf(new Date());
+  const dayCard = (d) => {
     const iso = isoOf(d);
     const evs = all.filter((r) => r.eventDate === iso);
     const wd = d.getDay();
-    return h("div", { class: "day" + (i === 0 ? " today" : "") + (wd === 0 || wd === 6 ? " weekend" : "") },
-      h("div", { class: "day-h" }, h("b", null, d.getDate()), h("span", null, i === 0 ? "dnes" : `${WEEKDAYS[wd]} · ${MONTHS[d.getMonth()]}`)),
+    const isToday = iso === todayIso;
+    return h("div", { class: "day" + (isToday ? " today" : "") + (iso < todayIso ? " past" : "") + (wd === 0 || wd === 6 ? " weekend" : "") },
+      h("div", { class: "day-h" }, h("b", null, d.getDate()), h("span", null, isToday ? "dnes" : `${WEEKDAYS[wd]} · ${MONTHS[d.getMonth()]}`)),
       evs.length
         ? evs.map((r) => { const s = statusOf(r); return h("button", { class: "ev", type: "button", style: `--k:${ST[s].k};--ks:${ST[s].ks}`, onclick: () => openDrawer(r.id) },
             h("b", null, `#${r.nexId} · ${ST[s].label}`), h("strong", null, r.event || "Bez názvu akce"), h("span", null, r.customer)); })
         : h("span", { class: "nothing" }, "volno"));
-  }));
+  };
+  const weeks = [0, 1].map((w) => {
+    const days = [];
+    for (let i = 0; i < 7; i++) days.push(new Date(wr.mon.getFullYear(), wr.mon.getMonth(), wr.mon.getDate() + w * 7 + i));
+    return h("section", null,
+      h("h2", { class: "week-t" }, w === 0 ? "Tento týden" : "Příští týden", h("span", null, `Po ${fmtShort(days[0])} – Ne ${fmtShort(days[6])}`)),
+      h("div", { class: "board" }, days.map(dayCard)));
+  });
   return [
     h("header", { class: "pagehead" },
-      h("div", null, h("p", { class: "eyebrow" }, "Kalendář"), h("h1", null, "Příštích 14 dní"),
+      h("div", null, h("p", { class: "eyebrow" }, "Kalendář"), h("h1", null, "Tento a příští týden"),
         h("p", null, "Barva karty ukazuje stav obsahu. Kliknutím otevřete detail."))),
-    board];
+    h("div", { class: "weeks" }, weeks)];
 }
 
 /* ---------- drawer ---------- */
