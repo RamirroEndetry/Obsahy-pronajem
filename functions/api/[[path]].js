@@ -5,6 +5,7 @@ const SESSION_DAYS = 30;
 const MAX_FAILS = 5;
 const LOCK_MS = 5 * 60 * 1000;
 const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+const MAX_FILE_BYTES = 200000;
 
 const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), {
@@ -108,9 +109,10 @@ async function version(env) {
 }
 
 async function listRentals(env) {
-  const [rs, its, ver] = await env.DB.batch([
+  const [rs, its, fs, ver] = await env.DB.batch([
     env.DB.prepare("SELECT * FROM rentals"),
     env.DB.prepare("SELECT * FROM items ORDER BY created_at"),
+    env.DB.prepare("SELECT id, rental_id, name, size, created_by, created_at FROM files ORDER BY created_at"),
     env.DB.prepare("SELECT v FROM meta WHERE k = 'version'"),
   ]);
   const byRental = new Map();
@@ -118,12 +120,18 @@ async function listRentals(env) {
     if (!byRental.has(it.rental_id)) byRental.set(it.rental_id, []);
     byRental.get(it.rental_id).push({ id: it.id, url: it.url, label: it.label, by: it.created_by, at: it.created_at });
   }
+  const filesByRental = new Map();
+  for (const f of fs.results) {
+    if (!filesByRental.has(f.rental_id)) filesByRental.set(f.rental_id, []);
+    filesByRental.get(f.rental_id).push({ id: f.id, name: f.name, size: f.size, by: f.created_by, at: f.created_at });
+  }
   return {
     version: ver.results[0] ? ver.results[0].v : 0,
     rentals: rs.results.map((r) => ({
       id: r.id, nexId: r.id, reported: r.reported, customer: r.customer, contact: r.contact,
       event: r.event, eventDate: r.event_date, address: r.address, note: r.note,
       items: byRental.get(r.id) || [],
+      files: filesByRental.get(r.id) || [],
       confirmed: r.confirmed_at ? { by: r.confirmed_by, at: r.confirmed_at } : null,
       selfUpload: r.self_upload ? { by: r.self_by, at: r.self_at } : null,
       createdBy: r.created_by, createdAt: r.created_at,
@@ -201,6 +209,7 @@ async function rentals(req, env, me, parts) {
     const denied = adminOnly(); if (denied) return denied;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM items WHERE rental_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM files WHERE rental_id = ?").bind(id),
       env.DB.prepare("DELETE FROM rentals WHERE id = ?").bind(id),
       bump(env),
     ]);
@@ -225,19 +234,49 @@ async function rentals(req, env, me, parts) {
     return json(await listRentals(env));
   }
 
-  // POST /api/rentals/:id/items  { url, label }
+  // POST /api/rentals/:id/items  { url, label }  nebo  { items: [{ url, label }, ...] }
   if (parts.length === 2 && parts[1] === "items" && method === "POST") {
     const denied = adminOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
-    let url;
-    try { url = new URL(clean(body.url, 2000)); } catch { return fail(400, "Tohle nevypadá jako platný odkaz."); }
-    if (url.protocol !== "https:" && url.protocol !== "http:") return fail(400, "Odkaz musí začínat http:// nebo https://.");
+    const list = Array.isArray(body.items) ? body.items.slice(0, 100) : [body];
+    const stmts = [];
+    for (const [i, it] of list.entries()) {
+      let url;
+      try { url = new URL(clean(it.url, 2000)); } catch { return fail(400, "Tohle nevypadá jako platný odkaz."); }
+      if (url.protocol !== "https:" && url.protocol !== "http:") return fail(400, "Odkaz musí začínat http:// nebo https://.");
+      stmts.push(env.DB.prepare("INSERT INTO items (id, rental_id, url, label, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(randomId(8), id, url.href, clean(it.label, 200), me.id, now + i));
+    }
+    if (!stmts.length) return fail(400, "Žádný odkaz k uložení.");
+    await env.DB.batch([...stmts, touch, bump(env)]);
+    return json(await listRentals(env), 201);
+  }
+
+  // POST /api/rentals/:id/files  { name, content }  — malý textový soubor
+  if (parts.length === 2 && parts[1] === "files" && method === "POST") {
+    const denied = adminOnly(); if (denied) return denied;
+    const body = await req.json().catch(() => ({}));
+    const name = clean(body.name, 120).replace(/[\\/:*?"<>|\r\n]+/g, "_") || "soubor.txt";
+    if (!/\.txt$/i.test(name)) return fail(400, "Nahrát jde jen textový soubor .txt.");
+    const content = String(body.content ?? "");
+    const size = new TextEncoder().encode(content).length;
+    if (size > MAX_FILE_BYTES) return fail(413, `Soubor je moc velký (max ${MAX_FILE_BYTES / 1000} kB).`);
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO items (id, rental_id, url, label, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(randomId(8), id, url.href, clean(body.label, 200), me.id, now),
+      env.DB.prepare("INSERT INTO files (id, rental_id, name, content, size, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(randomId(8), id, name, content, size, me.id, now),
       touch, bump(env),
     ]);
     return json(await listRentals(env), 201);
+  }
+
+  // DELETE /api/rentals/:id/files/:fileId
+  if (parts.length === 3 && parts[1] === "files" && method === "DELETE") {
+    const denied = adminOnly(); if (denied) return denied;
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM files WHERE id = ? AND rental_id = ?").bind(parts[2], id),
+      touch, bump(env),
+    ]);
+    return json(await listRentals(env));
   }
 
   // DELETE /api/rentals/:id/items/:itemId
@@ -272,6 +311,24 @@ async function rentals(req, env, me, parts) {
   return fail(404, "Neznámá adresa.");
 }
 
+/* ---------- files ---------- */
+// GET /api/files/:id[?inline=1] — stažení (nebo zobrazení) textového souboru
+async function downloadFile(req, env, fileId) {
+  const f = await env.DB.prepare("SELECT name, content FROM files WHERE id = ?").bind(fileId).first();
+  if (!f) return fail(404, "Soubor neexistuje.");
+  const inline = new URL(req.url).searchParams.get("inline") === "1";
+  const ascii = f.name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
+  return new Response(f.content, {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": `${inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(f.name)}`,
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "default-src 'none'",
+      "cache-control": "no-store",
+    },
+  });
+}
+
 /* ---------- router ---------- */
 export async function onRequest({ request: req, env, params }) {
   const parts = Array.isArray(params.path) ? params.path : params.path ? [params.path] : [];
@@ -292,6 +349,7 @@ export async function onRequest({ request: req, env, params }) {
     if (!me) return fail(401, "Nejste přihlášen(a).");
     if (route === "me" && method === "GET") return json(publicUser(me.id, me));
     if (parts[0] === "rentals") return await rentals(req, env, me, parts.slice(1));
+    if (parts[0] === "files" && parts.length === 2 && method === "GET") return await downloadFile(req, env, parts[1]);
     return fail(404, "Neznámá adresa.");
   } catch (e) {
     return fail(500, "Chyba serveru: " + (e && e.message ? e.message : String(e)));

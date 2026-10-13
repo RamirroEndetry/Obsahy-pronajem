@@ -333,6 +333,13 @@ label.fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; co
 .file .meta { grid-column: 2; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .file .fa { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 4px; align-items: center; }
 .empty-files { color: var(--muted); font-size: 14px; padding: 22px; border: 1.5px dashed var(--line); border-radius: 16px; text-align: center; }
+.upbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.drop { border: 2px dashed var(--line); border-radius: 16px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.uprev { border: 1.5px solid var(--accent); background: var(--accent-soft); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.uprev strong { font-weight: 700; overflow-wrap: anywhere; }
+.uprev ul { margin: 0; padding: 0 0 0 18px; max-height: 160px; overflow: auto; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.uprev .chk { grid-column: auto; }
 .addlink { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
 .note { min-height: 80px; resize: vertical; }
 .note-ro { white-space: pre-line; padding: 14px; border-radius: 14px; background: var(--amber-soft); color: var(--ink); font-size: 14px; }
@@ -673,7 +680,7 @@ function rel(n) {
 function plural(n, one, few, many) { return n === 1 ? one : n > 1 && n < 5 ? few : many; }
 
 /* ---------- status ---------- */
-function statusOf(r) { if (r.confirmed) return "done"; if (r.selfUpload) return "self"; return (r.items || []).length ? "waiting" : "missing"; }
+function statusOf(r) { if (r.confirmed) return "done"; if (r.selfUpload) return "self"; return (r.items || []).length || (r.files || []).length ? "waiting" : "missing"; }
 const ST = {
   missing: { label: "Chybí obsah", k: "var(--red)", ks: "var(--red-soft)" },
   waiting: { label: "Čeká na nahrání", k: "var(--amber)", ks: "var(--amber-soft)" },
@@ -715,6 +722,29 @@ function provider(url) {
   try { host = new URL(url).hostname.replace(/^www\./, ""); } catch {}
   for (const [re, name, ab, color] of PROVIDERS) if (re.test(host)) return { name, ab, color, host };
   return { name: host || "Odkaz", ab: (host[0] || "?").toUpperCase(), color: "#5d6685", host };
+}
+
+/* ---------- text files ---------- */
+const MAX_FILE_BYTES = 200000;
+function extractLinks(text, existing) {
+  const seen = new Set(existing);
+  const out = [];
+  const re = /\b(?:https?:\/\/|www\.|we\.tl\/)[^\s<>"'`]+/gi;
+  for (let m of String(text).match(re) || []) {
+    m = m.replace(/[)\].,;:!?]+$/, "");
+    if (/^(?:www\.|we\.tl\/)/i.test(m)) m = "https://" + m;
+    try { m = new URL(m).href; } catch { continue; }
+    if (!seen.has(m)) { seen.add(m); out.push(m); }
+  }
+  return out;
+}
+function fmtSize(n) { return n < 1000 ? `${n} B` : `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(".", ",")} kB`; }
+function contentCount(r) {
+  const n = (r.items || []).length, f = (r.files || []).length;
+  const parts = [];
+  if (n) parts.push(`${n} ${plural(n, "odkaz", "odkazy", "odkazů")}`);
+  if (f) parts.push(`${f} ${plural(f, "soubor", "soubory", "souborů")}`);
+  return parts.join(", ");
 }
 
 /* ---------- writes ---------- */
@@ -892,6 +922,7 @@ function renderOverview(all) {
   const acts = [];
   for (const r of all) {
     for (const it of r.items || []) acts.push({ at: it.at, by: it.by, id: r.id, txt: "vložil(a) obsah k" });
+    for (const f of r.files || []) acts.push({ at: f.at, by: f.by, id: r.id, txt: "nahrál(a) soubor k" });
     if (r.confirmed) acts.push({ at: r.confirmed.at, by: r.confirmed.by, id: r.id, txt: "potvrdil(a) nahrání" });
     if (r.createdAt && r.createdBy) acts.push({ at: r.createdAt, by: r.createdBy, id: r.id, txt: "přidal(a) pronájem" });
   }
@@ -976,13 +1007,13 @@ function fillTickets(el, shown) {
   }
   for (const r of shown) {
     const items = r.items || [];
-    const provs = [...new Map(items.map((it) => { const p = provider(it.url); return [p.name, p]; })).values()].slice(0, 3);
+    const provs = [...new Map([...items.map((it) => { const p = provider(it.url); return [p.name, p]; }), ...((r.files || []).length ? [["TXT", { name: "Textový soubor", ab: "TXT", color: "#475569" }]] : [])]).values()].slice(0, 3);
     el.append(h("button", { class: "ticket" + (isUrgent(r) ? " urgent" : ""), type: "button", onclick: () => openDrawer(r.id) },
       calTile(r),
       h("div", { class: "ttl" },
         h("span", { class: "id" }, `#${r.nexId}`, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
         h("strong", null, r.event || "Bez názvu akce"),
-        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : items.length ? ` · ${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : ""))),
+        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : ""))),
       h("div", { class: "provs" }, provs.map((p) => h("span", { class: "pv", style: `--pc:${p.color}`, title: p.name }, p.ab))),
       track(r),
       h("span", { class: "chev" }, icon("chev", 20))));
@@ -1030,11 +1061,13 @@ function buildDrawer() {
   });
   const note = h("textarea", { class: "in note", id: "drNote", placeholder: "Poznámka pro techniky (které panely, délka spotu, formát…)", "aria-label": "Poznámka" });
   note.addEventListener("change", () => { const id = openId; if (id && isAdmin()) mutate("PATCH", `rentals/${encodeURIComponent(id)}`, { note: note.value }, "Poznámka uložena."); });
-  dr = { url, label, form, note, delArm: false, justConfirmed: false };
+  const fileInput = h("input", { type: "file", accept: ".txt,text/plain", hidden: true, id: "drFile" });
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) pickFile(fileInput.files[0]); fileInput.value = ""; });
+  dr = { url, label, form, note, fileInput, upload: null, uploading: false, delArm: false, justConfirmed: false };
 }
 function openDrawer(id) {
   if (!dr) buildDrawer();
-  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.delArm = false; }
+  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.delArm = false; dr.upload = null; }
   openId = id;
   const root = $("#drawerRoot");
   root.hidden = false;
@@ -1051,6 +1084,59 @@ function closeDrawer() {
 }
 $("#backdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+
+function pickFile(file) {
+  if (!isAdmin() || !openId) return;
+  if (!/\.txt$/i.test(file.name)) { toast("Nahrát jde jen textový soubor .txt."); return; }
+  if (file.size > MAX_FILE_BYTES) { toast(`Soubor je moc velký (max ${MAX_FILE_BYTES / 1000} kB).`); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const r = docs.get(openId);
+    const content = String(reader.result || "");
+    dr.upload = { name: file.name, size: file.size, content, links: extractLinks(content, (r && r.items || []).map((i) => i.url)), addLinks: true };
+    renderDrawer();
+  };
+  reader.onerror = () => toast("Soubor se nepodařilo přečíst.");
+  reader.readAsText(file, "utf-8");
+}
+async function uploadFile() {
+  const id = openId, up = dr.upload;
+  if (!id || !up || dr.uploading) return;
+  dr.uploading = true; renderDrawer();
+  const res = await mutate("POST", `rentals/${encodeURIComponent(id)}/files`, { name: up.name, content: up.content });
+  let added = 0;
+  if (res && up.addLinks && up.links.length) {
+    const r2 = await mutate("POST", `rentals/${encodeURIComponent(id)}/items`, { items: up.links.map((url) => ({ url, label: "" })) });
+    if (r2) added = up.links.length;
+  }
+  dr.uploading = false;
+  if (res) { dr.upload = null; toast(added ? `Soubor nahrán a přidáno ${added} ${plural(added, "odkaz", "odkazy", "odkazů")}.` : "Soubor nahrán."); }
+  renderDrawer();
+}
+
+function uploadUi() {
+  const up = dr.upload;
+  if (up) {
+    const box = h("div", { class: "uprev" },
+      h("div", null, h("strong", null, up.name), h("span", { class: "meta", style: "display:block;font-size:12px;color:var(--muted)" }, fmtSize(up.size))),
+      up.links.length
+        ? [h("label", { class: "chk" }, h("input", { type: "checkbox", id: "drAddLinks", checked: up.addLinks, onchange: (e) => { up.addLinks = e.target.checked; } }),
+              `Přidat ${up.links.length} ${plural(up.links.length, "nalezený odkaz", "nalezené odkazy", "nalezených odkazů")} i jednotlivě`),
+           h("ul", null, up.links.map((l) => h("li", null, l)))]
+        : h("span", { style: "font-size:13px;color:var(--muted)" }, "V souboru jsem nenašel žádné nové odkazy, nahraje se jen soubor."),
+      h("div", { class: "row-actions" },
+        h("button", { class: "btn primary", type: "button", disabled: dr.uploading, onclick: uploadFile }, icon("check", 16, 2.4), dr.uploading ? "Nahrávám…" : "Nahrát soubor"),
+        h("button", { class: "btn ghost", type: "button", disabled: dr.uploading, onclick: () => { dr.upload = null; renderDrawer(); } }, "Zrušit")));
+    return box;
+  }
+  const drop = h("div", { class: "drop" }, "Přetáhněte sem .txt soubor, nebo ",
+    h("button", { class: "btn ghost", type: "button", style: "padding:2px 6px;color:var(--accent)", onclick: () => dr.fileInput.click() }, "vyberte z počítače"),
+    dr.fileInput);
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) pickFile(f); });
+  return h("div", { class: "upbar", style: "display:block" }, drop);
+}
 
 function renderDrawer() {
   if (!openId || !dr) return;
@@ -1090,9 +1176,18 @@ function renderDrawer() {
   }
 
   const files = h("section", null,
-    h("p", { class: "sec-t" }, h("span", null, "Obsah ke stažení"), h("span", null, items.length ? `${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : "")),
-    items.length
-      ? h("ul", { class: "files" }, items.map((it) => {
+    h("p", { class: "sec-t" }, h("span", null, "Obsah ke stažení"), h("span", null, contentCount(r))),
+    items.length || (r.files || []).length
+      ? h("ul", { class: "files" }, (r.files || []).map((f) => h("li", { class: "file" },
+            h("span", { class: "pv lg", style: "--pc:#475569" }, "TXT"),
+            h("strong", null, f.name),
+            h("span", { class: "meta" }, `${fmtSize(f.size)} · ${who(f.by)}, ${fmtStamp(f.at)}`),
+            h("div", { class: "fa" },
+              h("a", { class: "btn primary", href: `/api/files/${encodeURIComponent(f.id)}?inline=1`, target: "_blank", rel: "noopener" }, icon("ext", 15, 2.2), "Zobrazit"),
+              h("a", { class: "btn ghost icon", href: `/api/files/${encodeURIComponent(f.id)}`, download: f.name, title: "Stáhnout", "aria-label": "Stáhnout soubor" }, icon("down", 16)),
+              admin ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat soubor", "aria-label": "Odebrat soubor",
+                onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/files/${encodeURIComponent(f.id)}`, undefined, "Soubor odebrán.") }, icon("trash", 16)) : null))),
+          items.map((it) => {
           const p = provider(it.url);
           return h("li", { class: "file" },
             h("span", { class: "pv lg", style: `--pc:${p.color}` }, p.ab),
@@ -1105,7 +1200,8 @@ function renderDrawer() {
                 onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/items/${encodeURIComponent(it.id)}`) }, icon("trash", 16)) : null));
         }))
       : h("div", { class: "empty-files" }, r.selfUpload ? "Klient si obsah nahrává sám, odkazy tu být nemusí." : admin ? "Zatím žádný obsah. Vložte odkaz, který poslal klient." : "Obsah zatím nebyl dodán. Jakmile ho admin vloží, objeví se tady."),
-    admin ? dr.form : null);
+    admin ? dr.form : null,
+    admin ? uploadUi() : null);
 
   if (document.activeElement !== dr.note) dr.note.value = r.note || "";
   const noteSec = admin
