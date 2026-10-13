@@ -1,0 +1,1181 @@
+<meta charset="utf-8">
+<title>Obsahy pronájmů</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Onest:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: app shell — sticky sidebar nav + main views (Přehled / Pronájmy / Kalendář); rental detail in a right-hand drawer. Cobalt signal + mint on ink hero. */
+:root {
+  --bg: #f2f4f9;
+  --surface: #ffffff;
+  --surface-2: #f5f7fc;
+  --surface-3: #eaeef7;
+  --line: #dfe4ef;
+  --ink: #0c1230;
+  --muted: #5d6685;
+  --accent: #2b57ff;
+  --accent-2: #12b886;
+  --accent-soft: #e5ebff;
+  --accent-ink: #ffffff;
+  --hero-bg: #0b1130;
+  --hero-ink: #f2f5ff;
+  --hero-muted: #a7b1d9;
+  --red: #d92b4b; --red-soft: #fde8ed;
+  --amber: #b46a00; --amber-soft: #fff0d6;
+  --green: #0b8a5c; --green-soft: #dbf5ea;
+  --shadow-sm: 0 1px 2px rgba(12, 18, 48, .06);
+  --shadow: 0 1px 2px rgba(12, 18, 48, .05), 0 14px 40px -18px rgba(12, 18, 48, .22);
+  --shadow-lg: 0 30px 80px -20px rgba(12, 18, 48, .35);
+  --backdrop: rgba(10, 14, 36, .42);
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Onest", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #080c1d; --surface: #10172f; --surface-2: #151d3a; --surface-3: #1c2547; --line: #252f57;
+    --ink: #e9edff; --muted: #98a2c6; --accent: #7690ff; --accent-2: #3ddba6; --accent-soft: #1b2659; --accent-ink: #080c1d;
+    --hero-bg: #0e1640; --hero-ink: #f2f5ff; --hero-muted: #a7b1d9;
+    --red: #ff7d92; --red-soft: #3c1725; --amber: #ffc066; --amber-soft: #392a10; --green: #4ad9a2; --green-soft: #0e3427;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 14px 40px -18px rgba(0,0,0,.7);
+    --shadow-lg: 0 30px 80px -20px rgba(0,0,0,.8);
+    --backdrop: rgba(2, 4, 14, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #080c1d; --surface: #10172f; --surface-2: #151d3a; --surface-3: #1c2547; --line: #252f57;
+  --ink: #e9edff; --muted: #98a2c6; --accent: #7690ff; --accent-2: #3ddba6; --accent-soft: #1b2659; --accent-ink: #080c1d;
+  --hero-bg: #0e1640; --hero-ink: #f2f5ff; --hero-muted: #a7b1d9;
+  --red: #ff7d92; --red-soft: #3c1725; --amber: #ffc066; --amber-soft: #392a10; --green: #4ad9a2; --green-soft: #0e3427;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 14px 40px -18px rgba(0,0,0,.7);
+  --shadow-lg: 0 30px 80px -20px rgba(0,0,0,.8);
+  --backdrop: rgba(2, 4, 14, .6);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { min-height: 100%; }
+body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ico { display: inline-flex; flex: none; }
+.ico svg { display: block; }
+.mono { font-family: var(--f-mono); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- buttons ---------- */
+.btn { border: 1.5px solid var(--line); background: var(--surface); padding: 9px 15px; border-radius: 11px; cursor: pointer; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: border-color .15s, background .15s, transform .1s, filter .15s; white-space: nowrap; text-decoration: none; color: var(--ink); }
+.btn:hover { border-color: var(--muted); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 18px -8px var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); padding-inline: 10px; }
+.btn.ghost:hover { color: var(--ink); background: var(--surface-3); }
+.btn.danger { color: var(--red); }
+.btn.go { background: var(--green); border-color: var(--green); color: var(--surface); padding: 12px 18px; font-size: 15px; }
+.btn.icon { padding: 8px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.blink { animation: blink 1.15s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 70%, transparent); } 50% { box-shadow: 0 0 0 9px transparent; filter: brightness(1.15); } }
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* ================= LOGIN ================= */
+.login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.login-hero { background: var(--hero-bg); color: var(--hero-ink); padding: 44px clamp(24px, 5vw, 72px); display: flex; flex-direction: column; justify-content: space-between; gap: 40px; position: relative; overflow: hidden; isolation: isolate; }
+.glow { position: absolute; border-radius: 50%; filter: blur(60px); z-index: -1; pointer-events: none; }
+.glow.a { width: 520px; height: 520px; background: #2b57ff; opacity: .55; top: -180px; right: -160px; }
+.glow.b { width: 380px; height: 380px; background: #12b886; opacity: .35; bottom: -160px; left: -120px; }
+.grid-bg { position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px); background-size: 44px 44px; mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 75%); }
+.logo { display: flex; align-items: center; gap: 11px; font: 700 16px/1 var(--f-display); letter-spacing: .01em; }
+.logo-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #2b57ff, #12b886); display: grid; place-items: center; box-shadow: 0 8px 20px -8px #2b57ff; flex: none; }
+.logo-mark i { display: block; width: 15px; height: 11px; border: 2px solid #fff; border-radius: 3px; position: relative; }
+.logo-mark i::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 6px; height: 2px; background: #fff; transform: translateX(-50%); }
+.logo small { display: block; font: 500 11px/1.2 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; opacity: .6; margin-top: 3px; }
+.login-hero h1 { font: 800 clamp(38px, 5.4vw, 68px)/1 var(--f-display); letter-spacing: -.03em; margin: 0; max-width: 11ch; text-wrap: balance; }
+.login-hero h1 em { font-style: normal; background: linear-gradient(90deg, #8fa6ff, #5ff0c0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.login-hero p { margin: 16px 0 0; max-width: 44ch; color: var(--hero-muted); font-size: 17px; }
+.device { width: min(100%, 420px); border-radius: 18px; background: #050817; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 40px 80px -30px rgba(0,0,0,.7), inset 0 0 0 6px #0b1236; padding: 18px; display: flex; flex-direction: column; gap: 9px; }
+.device-top { display: flex; justify-content: space-between; color: #8b96c6; font: 500 11px var(--f-mono); letter-spacing: .08em; padding: 0 4px 4px; }
+.device-row { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.05); color: #dfe5ff; font-size: 12px; animation: rowfx 9s ease-in-out infinite; }
+.device-row:nth-child(3) { animation-delay: -3s; } .device-row:nth-child(4) { animation-delay: -6s; }
+.device-row b { font: 600 13px var(--f-mono); color: #fff; }
+.device-row s { text-decoration: none; display: flex; flex-direction: column; gap: 5px; }
+.device-row s i { display: block; height: 5px; border-radius: 3px; background: rgba(255,255,255,.2); }
+.device-row s i + i { width: 60%; background: rgba(255,255,255,.1); }
+.device-row em { font-style: normal; font-weight: 700; font-size: 11px; padding: 4px 9px; border-radius: 99px; }
+.device-row .r { background: #4a1a2a; color: #ff9aa9; } .device-row .a { background: #43310f; color: #ffcd7d; } .device-row .g { background: #0f3b2c; color: #6ff0b9; }
+@keyframes rowfx { 0%, 28% { opacity: 1; transform: none; } 33%, 95% { opacity: .5; } 100% { opacity: 1; } }
+.login-form-wrap { display: grid; place-items: center; padding: 48px 24px; }
+.login-card { width: min(100%, 420px); display: flex; flex-direction: column; gap: 22px; }
+.login-card h2 { margin: 0; font: 800 32px/1.05 var(--f-display); letter-spacing: -.02em; }
+.login-card .sub { margin: -12px 0 0; color: var(--muted); }
+.who { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.who-btn { border: 1.5px solid var(--line); background: var(--surface); border-radius: 16px; padding: 18px 8px 14px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; font-weight: 700; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.who-btn:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
+.who-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.who-btn small { font: 500 11px var(--f-mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-top: -4px; }
+.av { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; font: 700 17px var(--f-display); color: #fff; background: var(--c, var(--accent)); flex: none; box-shadow: inset 0 -6px 12px rgba(0,0,0,.15); }
+.av.sm { width: 36px; height: 36px; font-size: 13px; }
+.av.xs { width: 26px; height: 26px; font-size: 10px; }
+.pin-lbl { font-weight: 600; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+.pin { width: 100%; padding: 16px 18px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); font: 600 28px/1 var(--f-mono); letter-spacing: .7em; text-align: center; }
+.pin:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.login-err { color: var(--red); font-size: 14px; font-weight: 600; min-height: 1.5em; margin: -10px 0 0; }
+.btn-xl { padding: 15px 18px; font-size: 16px; border-radius: 14px; }
+.fineprint { font-size: 12px; color: var(--muted); margin: 0; }
+
+/* ================= SHELL ================= */
+.shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+.sidebar { position: sticky; top: 0; height: 100vh; padding: 22px 16px; display: flex; flex-direction: column; gap: 26px; background: var(--surface); border-right: 1px solid var(--line); }
+.sidebar .logo { color: var(--ink); padding: 0 6px; }
+.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav-t { font: 600 10px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); padding: 0 12px 8px; }
+.nav button { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; }
+.nav button:hover { background: var(--surface-2); color: var(--ink); }
+.nav button:focus-visible { outline: 2px solid var(--accent); }
+.nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+.nav .cnt { margin-left: auto; font: 600 11px/1 var(--f-mono); padding: 4px 7px; border-radius: 7px; background: var(--surface-3); color: var(--muted); }
+.nav .cnt.hot { background: var(--red); color: #fff; }
+.side-cta { display: flex; flex-direction: column; gap: 8px; }
+.usercard { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); }
+.usercard div { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.usercard strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role { display: inline-flex; align-items: center; gap: 4px; font: 600 10px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+.role.admin { color: var(--accent); }
+.sync { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); padding: 0 12px; }
+.sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.sync[data-s="live"]::before { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.sync[data-s="err"]::before { background: var(--red); }
+
+.main { padding: 30px clamp(16px, 3.2vw, 44px) 90px; display: flex; flex-direction: column; gap: 26px; min-width: 0; width: 100%; max-width: 1280px; }
+.pagehead { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.pagehead h1 { margin: 0; font: 800 clamp(30px, 3.6vw, 44px)/1.02 var(--f-display); letter-spacing: -.03em; text-wrap: balance; }
+.pagehead p { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
+.eyebrow { font: 600 11px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- overview ---------- */
+.hero { border-radius: 26px; background: var(--hero-bg); color: var(--hero-ink); padding: clamp(22px, 3vw, 34px); display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(20px, 3vw, 40px); align-items: center; position: relative; overflow: hidden; isolation: isolate; box-shadow: var(--shadow-lg); }
+.hero .glow.a { width: 460px; height: 460px; top: -220px; right: -120px; opacity: .5; }
+.hero .glow.b { width: 300px; height: 300px; bottom: -200px; left: 80px; opacity: .3; }
+.ring { position: relative; width: 150px; height: 150px; }
+.ring svg { transform: rotate(-90deg); }
+.ring .lbl { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ring .lbl b { font: 800 38px/1 var(--f-display); letter-spacing: -.02em; }
+.ring .lbl span { font: 500 10px/1.3 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--hero-muted); margin-top: 4px; }
+.hero h2 { margin: 0 0 8px; font: 700 22px/1.15 var(--f-display); letter-spacing: -.01em; }
+.hero p { margin: 0; color: var(--hero-muted); font-size: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; font-size: 13px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; color: var(--hero-ink); }
+.legend i { width: 9px; height: 9px; border-radius: 3px; }
+.next { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 20px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; text-align: left; color: inherit; transition: background .15s; min-width: 0; }
+.next:hover { background: rgba(255,255,255,.11); }
+.next .k { font: 600 10px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--hero-muted); }
+.next .cd { display: flex; align-items: baseline; gap: 8px; }
+.next .cd b { font: 800 48px/.9 var(--f-display); letter-spacing: -.03em; background: linear-gradient(90deg, #9db0ff, #66f2c4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.next .cd span { color: var(--hero-muted); font-weight: 600; }
+.next strong { font: 700 17px/1.2 var(--f-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next small { color: var(--hero-muted); font-size: 13px; }
+.next .pill { align-self: flex-start; }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.stat { text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: 20px; padding: 18px; cursor: pointer; display: flex; flex-direction: column; gap: 12px; transition: transform .15s, box-shadow .15s, border-color .15s; color: var(--ink); }
+.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--k) 40%, var(--line)); }
+.stat-top { display: flex; justify-content: space-between; align-items: center; }
+.stat .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--ks); color: var(--k); }
+.stat .n { font: 800 42px/1 var(--f-display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.stat .l { font-weight: 700; font-size: 14px; }
+.stat .d { font-size: 12px; color: var(--muted); margin-top: -8px; }
+.bar { height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 99px; background: var(--k); }
+.stat.hot .ic { animation: pulse 1.3s ease-in-out infinite; }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.card { background: var(--surface); border: 1.5px solid var(--line); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.card-h h3 { margin: 0; font: 700 18px/1.2 var(--f-display); display: flex; align-items: center; gap: 10px; }
+.card-h h3 .ico { color: var(--accent); }
+.mini { display: flex; flex-direction: column; gap: 6px; }
+.mini button { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 14px; transition: background .15s; }
+.mini button:hover { background: var(--surface-2); }
+.mini button:focus-visible { outline: 2px solid var(--accent); }
+.mini .cal { padding: 6px 2px; }
+.mini .t { min-width: 0; display: flex; flex-direction: column; }
+.mini .t strong { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini .t span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.feed li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; padding: 9px 4px; position: relative; }
+.feed li:not(:last-child)::after { content: ""; position: absolute; left: 16px; top: 40px; bottom: -6px; width: 2px; background: var(--line); }
+.feed p { margin: 0; font-size: 14px; }
+.feed p b { font-weight: 700; }
+.feed small { color: var(--muted); font-size: 12px; }
+.feed .lnk { all: unset; cursor: pointer; color: var(--accent); font-weight: 700; font-family: var(--f-mono); font-size: 13px; }
+.muted-empty { color: var(--muted); font-size: 14px; padding: 18px; text-align: center; border: 1.5px dashed var(--line); border-radius: 14px; }
+
+/* ---------- list ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; background: var(--surface); border: 1.5px solid var(--line); border-radius: 13px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 7px 14px; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1.5px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 99px; cursor: pointer; font-size: 13px; font-weight: 600; display: inline-flex; gap: 8px; align-items: center; color: var(--ink); }
+.chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--k); }
+.chip b { font: 600 12px var(--f-mono); color: var(--muted); }
+.chip[aria-pressed="true"] { border-color: var(--k); background: var(--ks); }
+.search { flex: 1 1 220px; max-width: 340px; position: relative; margin-left: auto; }
+.search input { width: 100%; padding: 10px 14px 10px 40px; border-radius: 13px; border: 1.5px solid var(--line); background: var(--surface); }
+.search input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+.search .ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+
+.tickets { display: flex; flex-direction: column; gap: 10px; }
+.ticket { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 76px minmax(0, 1fr) auto minmax(230px, 290px) 20px; gap: 20px; align-items: center; padding: 12px 18px 12px 12px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 20px; transition: transform .15s, box-shadow .15s, border-color .15s; position: relative; }
+.ticket:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.ticket:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ticket.urgent { border-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+.cal { border-radius: 14px; background: var(--surface-3); text-align: center; padding: 9px 4px 8px; display: flex; flex-direction: column; gap: 3px; }
+.cal .m { font: 600 10px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.cal .dd { font: 800 28px/1 var(--f-display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.cal .rl { font-size: 11px; font-weight: 700; color: var(--muted); }
+.cal.soon { background: var(--accent); color: var(--accent-ink); box-shadow: 0 8px 20px -10px var(--accent); }
+.cal.soon .m, .cal.soon .rl { color: var(--accent-ink); opacity: .85; }
+.ttl { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ttl .id { font: 600 12px/1 var(--f-mono); color: var(--accent); letter-spacing: .04em; display: flex; align-items: center; gap: 10px; }
+.ttl strong { font: 700 17px/1.25 var(--f-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttl span { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.urg { display: inline-flex; align-items: center; gap: 6px; font: 700 11px var(--f-body); color: var(--red); letter-spacing: 0; }
+.urg::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: pulse 1.2s ease-in-out infinite; }
+.provs { display: flex; }
+.provs .pv { margin-left: -8px; border: 2px solid var(--surface); }
+.provs .pv:first-child { margin-left: 0; }
+.pv { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font: 700 11px var(--f-display); color: #fff; background: var(--pc); flex: none; }
+.pv.lg { width: 44px; height: 44px; border-radius: 13px; font-size: 14px; border: 0; }
+.track { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.step { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; font-size: 11px; font-weight: 600; color: var(--muted); text-align: center; }
+.step::before { content: ""; position: absolute; top: 9px; left: -50%; width: 100%; height: 3px; border-radius: 3px; background: var(--line); z-index: 0; }
+.step:first-child::before { display: none; }
+.step i { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); position: relative; z-index: 1; display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 800; }
+.step.on { color: var(--ink); }
+.step.on::before { background: var(--k); }
+.step.on i { border-color: var(--k); background: var(--k); color: var(--surface); }
+.step.cur i { box-shadow: 0 0 0 5px var(--ks); }
+.step.cur { color: var(--k); }
+.chev { color: var(--muted); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 99px; white-space: nowrap; background: var(--ks); color: var(--k); }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ---------- calendar ---------- */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+.day { background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 260px; }
+.day.today { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+.day.weekend { background: var(--surface-2); }
+.day-h { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 8px; border-bottom: 1px solid var(--line); }
+.day-h b { font: 800 26px/1 var(--f-display); letter-spacing: -.02em; }
+.day-h span { font: 600 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.day.today .day-h span { color: var(--accent); }
+.ev { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 10px 13px; border-radius: 12px; background: var(--ks); position: relative; overflow: hidden; }
+.ev::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--k); }
+.ev:hover { filter: brightness(.97); }
+.ev:focus-visible { outline: 2px solid var(--accent); }
+.ev b { font: 600 11px var(--f-mono); color: var(--k); }
+.ev strong { font-size: 13px; line-height: 1.3; }
+.ev span { font-size: 12px; color: var(--muted); }
+.day .nothing { color: var(--muted); font-size: 12px; text-align: center; margin: auto 0; opacity: .7; }
+
+/* ---------- panels ---------- */
+.panel { background: var(--surface); border: 1.5px solid var(--line); border-radius: 22px; padding: 24px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; }
+.panel h2 { margin: 0; font: 700 21px/1.2 var(--f-display); }
+.panel p { margin: 0; color: var(--muted); max-width: 72ch; }
+.paste { width: 100%; min-height: 120px; resize: vertical; border: 2px dashed var(--line); border-radius: 16px; background: var(--surface-2); padding: 16px; }
+.paste:focus { border-color: var(--accent); outline: none; }
+.preview { overflow-x: auto; }
+.preview table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.preview th, .preview td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.preview th { font: 600 11px/1.2 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tag { font: 600 11px/1 var(--f-mono); padding: 4px 7px; border-radius: 6px; background: var(--surface-3); color: var(--muted); white-space: nowrap; }
+.tag.new { background: var(--accent-soft); color: var(--accent); }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+label.fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; min-width: 0; }
+.in { border: 1.5px solid var(--line); background: var(--surface); border-radius: 11px; padding: 10px 12px; width: 100%; min-width: 0; color: var(--ink); font-weight: 400; }
+.in:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+/* ---------- drawer ---------- */
+.backdrop { position: fixed; inset: 0; background: var(--backdrop); backdrop-filter: blur(3px); z-index: 20; opacity: 0; transition: opacity .2s; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(580px, 100%); background: var(--surface); z-index: 21; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; transform: translateX(100%); transition: transform .26s cubic-bezier(.2,.8,.2,1); }
+.drawer-open .backdrop { opacity: 1; }
+.drawer-open .drawer { transform: none; }
+.dr-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 14px; border-bottom: 1px solid var(--line); }
+.dr-top .id { font: 600 13px var(--f-mono); color: var(--accent); }
+.dr-body { overflow-y: auto; padding: 24px 24px calc(40px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 24px; }
+.dr-title h2 { margin: 0; font: 800 28px/1.08 var(--f-display); letter-spacing: -.02em; text-wrap: balance; }
+.dr-title p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.fact { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.fact .ico { color: var(--muted); }
+.fact.soon { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.fact.soon .ico { color: var(--accent); }
+.dr-track { padding: 18px 10px 14px; border-radius: 18px; background: var(--surface-2); }
+.dr-track .step { font-size: 12px; }
+.sec-t { font: 600 11px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
+.files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.file { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 12px; border-radius: 16px; border: 1.5px solid var(--line); background: var(--surface); transition: border-color .15s; }
+.file:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.file .pv { grid-row: 1 / span 2; }
+.file strong { font-weight: 700; overflow-wrap: anywhere; line-height: 1.3; }
+.file .meta { grid-column: 2; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.file .fa { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 4px; align-items: center; }
+.empty-files { color: var(--muted); font-size: 14px; padding: 22px; border: 1.5px dashed var(--line); border-radius: 16px; text-align: center; }
+.addlink { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
+.note { min-height: 80px; resize: vertical; }
+.note-ro { white-space: pre-line; padding: 14px; border-radius: 14px; background: var(--amber-soft); color: var(--ink); font-size: 14px; }
+.confirm { border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border: 1.5px solid var(--line); }
+.confirm p { margin: 0; font-size: 14px; color: var(--muted); }
+.confirm.ok { background: var(--green-soft); border-color: transparent; }
+.confirm.ok .okline { display: flex; align-items: center; gap: 12px; color: var(--green); font-weight: 700; }
+.confirm.ok .okline .ck { width: 40px; height: 40px; border-radius: 50%; background: var(--green); color: var(--surface); display: grid; place-items: center; flex: none; }
+.confirm.pop .ck { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { 0% { transform: scale(.3); } 100% { transform: scale(1); } }
+dl.info { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 18px; font-size: 14px; }
+dl.info dt { color: var(--muted); }
+dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: flex; flex-direction: column; gap: 4px; }
+.cline { display: flex; align-items: center; gap: 6px; }
+.cline .btn { padding: 3px; color: var(--muted); }
+.danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
+
+.empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
+.empty strong { display: block; color: var(--ink); font: 700 21px var(--f-display); margin-bottom: 6px; }
+.toast { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 14px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow-lg); max-width: calc(100% - 32px); z-index: 40; }
+.ro-banner { font-size: 13px; background: var(--amber-soft); color: var(--amber); padding: 10px 14px; border-radius: 12px; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .btn.blink { outline: 3px solid var(--green); outline-offset: 3px; }
+}
+@media (max-width: 1100px) {
+  .ticket { grid-template-columns: 70px minmax(0, 1fr) minmax(210px, 250px) 20px; }
+  .ticket .provs { display: none; }
+  .hero { grid-template-columns: auto minmax(0, 1fr); }
+  .hero .next { grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  .login { grid-template-columns: 1fr; }
+  .login-hero { padding-block: 28px; gap: 22px; }
+  .login-hero .device { display: none; }
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: sticky; top: env(safe-area-inset-top, 0px); height: auto; z-index: 10; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar .logo small, .nav-t, .side-cta, .sidebar .sync { display: none; }
+  .nav { flex-direction: row; order: 3; width: 100%; overflow-x: auto; }
+  .nav button { padding: 8px 12px; }
+  .usercard { margin: 0 0 0 auto; padding: 4px; background: transparent; border: 0; }
+  .usercard div { display: none; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols { grid-template-columns: 1fr; }
+  .hero { grid-template-columns: 1fr; justify-items: start; }
+  .ticket { grid-template-columns: 62px minmax(0, 1fr) 18px; gap: 12px 14px; padding: 12px; }
+  .ticket .track { grid-column: 1 / -1; grid-row: 2; }
+  .ticket .chev { grid-column: 3; grid-row: 1; }
+  .search { margin-left: 0; max-width: none; }
+  .addlink { grid-template-columns: 1fr; }
+  .dr-body { padding-inline: 16px; }
+}
+</style>
+
+<!-- ============ LOGIN ============ -->
+<section class="login" id="loginView">
+  <div class="login-hero">
+    <span class="glow a"></span><span class="glow b"></span><span class="grid-bg"></span>
+    <div class="logo"><span class="logo-mark"><i></i></span><span>Digiday Obsahy<small>Content desk</small></span></div>
+    <div>
+      <h1>Každý panel s&nbsp;obsahem <em>včas.</em></h1>
+      <p>Pronájmy, odkazy na obsah od klientů a potvrzení nahrání na panely. Jeden přehled pro celý tým.</p>
+    </div>
+    <div class="device" aria-hidden="true">
+      <div class="device-top"><span>PANEL · LIVE</span><span>DIGIFEST 2026</span></div>
+      <div class="device-row"><b>#411</b><s><i></i><i></i></s><em class="g">Na panelech</em></div>
+      <div class="device-row"><b>#407</b><s><i></i><i></i></s><em class="a">Obsah dodán</em></div>
+      <div class="device-row"><b>#405</b><s><i></i><i></i></s><em class="r">Chybí obsah</em></div>
+    </div>
+  </div>
+  <div class="login-form-wrap">
+    <form class="login-card" id="loginForm" autocomplete="off">
+      <div>
+        <p class="eyebrow">Přihlášení</p>
+        <h2>Kdo dnes pracuje?</h2>
+      </div>
+      <p class="sub">Vyberte svůj účet a zadejte čtyřmístný PIN.</p>
+      <div class="who" id="whoPick" role="group" aria-label="Uživatel"></div>
+      <label class="pin-lbl" for="pin">PIN
+        <input class="pin" id="pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" placeholder="••••" autocomplete="off">
+      </label>
+      <p class="login-err" id="loginErr" role="alert"></p>
+      <button class="btn primary btn-xl" type="submit">Přihlásit se</button>
+      <p class="fineprint">Pouze pro tým Digiday. Přihlášení vydrží 30 dní, pak se přihlaste znovu.</p>
+    </form>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<div class="shell" id="appView" hidden>
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-mark"><i></i></span><span>Digiday Obsahy<small>Content desk</small></span></div>
+    <nav class="nav" id="nav" aria-label="Hlavní navigace"></nav>
+    <div class="side-cta" id="sideCta"></div>
+    <span class="sync" id="sync" data-s="load">Načítám…</span>
+    <div class="usercard">
+      <span class="av sm" id="meAv"></span>
+      <div><strong id="meName"></strong><span class="role" id="meRole"></span></div>
+      <button class="btn ghost icon" id="btnLogout" type="button" title="Odhlásit" aria-label="Odhlásit"></button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <section class="panel" id="importPanel" hidden>
+      <h2>Vložit pronájmy z NEXu</h2>
+      <p>V NEXu na stránce Pronájmy označte řádky tabulky (klidně celou tabulku), zkopírujte je (Ctrl+C) a vložte sem (Ctrl+V). Existující pronájmy se jen aktualizují, odkazy u nich zůstanou.</p>
+      <textarea class="paste" id="paste" placeholder="Sem vložte zkopírovanou tabulku pronájmů"></textarea>
+      <div class="preview" id="preview"></div>
+      <div class="row-actions">
+        <button class="btn primary" id="btnImportSave" type="button" disabled>Uložit pronájmy</button>
+        <button class="btn ghost" id="btnImportCancel" type="button">Zavřít</button>
+      </div>
+    </section>
+
+    <section class="panel" id="addPanel" hidden>
+      <h2>Přidat pronájem ručně</h2>
+      <form id="addForm" class="form-grid">
+        <label class="fld">ID pronájmu *<input class="in" id="fId" required inputmode="numeric" placeholder="např. 412"></label>
+        <label class="fld">Zákazník *<input class="in" id="fCustomer" required></label>
+        <label class="fld">Název akce<input class="in" id="fEvent"></label>
+        <label class="fld">Datum akce *<input class="in" id="fDate" type="date" required></label>
+        <label class="fld">Kontaktní osoba<input class="in" id="fContact" placeholder="jméno, telefon, e-mail"></label>
+        <label class="fld">Adresa místa akce<input class="in" id="fAddress"></label>
+        <div class="row-actions" style="grid-column: 1 / -1">
+          <button class="btn primary" type="submit">Přidat pronájem</button>
+          <button class="btn ghost" type="button" id="btnAddCancel">Zavřít</button>
+        </div>
+      </form>
+    </section>
+
+    <div id="view"></div>
+  </main>
+</div>
+
+<div id="drawerRoot" hidden>
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detail pronájmu"></aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ---------- users (loaded from the server; PINs are checked server-side) ---------- */
+let USERS = {};
+const URGENT_DAYS = 3;
+const POLL_MS = 10000;
+const NEX_FIELDS = ["nexId", "reported", "customer", "contact", "event", "eventDate", "address"];
+const MONTHS = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
+const WEEKDAYS = ["ne", "po", "út", "st", "čt", "pá", "so"];
+const $ = (s) => document.querySelector(s);
+const pad = (n) => String(n).padStart(2, "0");
+const initials = (n) => n.split(/[\s.]+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+
+const ICONS = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+  list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+  cal: '<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  down: '<path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  ext: '<path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert: '<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+};
+function icon(name, size = 18, sw = 2) {
+  const s = document.createElement("span");
+  s.className = "ico";
+  s.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+  return s;
+}
+
+let me = null;
+const readOnly = false;
+let docs = new Map();
+let dataVersion = null;
+let view = "overview", period = "active", statFilter = null, query = "";
+let openId = null;
+let pending = [];
+const isAdmin = () => !!(me && USERS[me] && USERS[me].admin);
+
+/* ---------- server API ---------- */
+async function api(method, path, body) {
+  const opts = { method, credentials: "same-origin", headers: {} };
+  if (body !== undefined) { opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); }
+  let res;
+  try { res = await fetch("/api/" + path, opts); }
+  catch { setSync("err", "Bez připojení"); throw new Error("Server je nedostupný. Zkontrolujte připojení k internetu."); }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "login" && me) { forceLogout("Přihlášení vypršelo, přihlaste se znovu."); }
+  if (!res.ok) throw new Error(data.error || `Chyba ${res.status}`);
+  return data;
+}
+function setSync(s, text) { const el = $("#sync"); if (el) { el.dataset.s = s; el.textContent = text; } }
+function applyList(data) {
+  if (!data || !Array.isArray(data.rentals)) return;
+  dataVersion = data.version;
+  docs = new Map(data.rentals.map((r) => [r.id, r]));
+  setSync("live", "Synchronizováno");
+  render();
+}
+async function mutate(method, path, body, okMsg) {
+  try { const data = await api(method, path, body); applyList(data); if (okMsg) toast(okMsg); return data; }
+  catch (e) { toast(e.message); return null; }
+}
+let polling = false;
+async function poll() {
+  if (!me || polling || document.hidden) return;
+  polling = true;
+  try {
+    const data = await api("GET", "rentals" + (dataVersion != null ? `?v=${dataVersion}` : ""));
+    if (data.unchanged) setSync("live", "Synchronizováno");
+    else applyList(data);
+  } catch {}
+  polling = false;
+}
+setInterval(poll, POLL_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") el.style.cssText = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+  return el;
+}
+
+/* ---------- login ---------- */
+let pick = null, loggingIn = false;
+function renderWho() {
+  $("#whoPick").replaceChildren(...Object.entries(USERS).map(([id, u]) =>
+    h("button", { class: "who-btn", type: "button", "aria-pressed": String(pick === id), onclick: () => { pick = id; renderWho(); $("#pin").focus(); } },
+      h("span", { class: "av", style: `--c:${u.color}` }, initials(u.name)), u.login, h("small", null, u.admin ? "Admin" : "Uživatel"))));
+}
+async function tryLogin() {
+  const err = $("#loginErr");
+  if (loggingIn) return;
+  if (!pick) { err.textContent = "Nejdřív nahoře klikněte na svůj účet."; return; }
+  const pin = $("#pin").value.replace(/\D/g, "");
+  if (pin.length !== 4) { err.textContent = "PIN má čtyři číslice."; return; }
+  loggingIn = true; err.textContent = "Ověřuji…";
+  try {
+    const u = await api("POST", "login", { user: pick, pin });
+    err.textContent = ""; $("#pin").value = "";
+    enterApp(u.id);
+  } catch (ex) {
+    $("#pin").value = "";
+    err.textContent = ex.message;
+  }
+  loggingIn = false;
+}
+$("#loginForm").addEventListener("submit", (e) => { e.preventDefault(); tryLogin(); });
+$("#pin").addEventListener("input", () => { if (pick && $("#pin").value.replace(/\D/g, "").length === 4) tryLogin(); });
+$("#btnLogout").append(icon("logout", 18));
+function forceLogout(msg) {
+  closeDrawer();
+  me = null; pick = null; docs = new Map(); dataVersion = null; renderWho();
+  $("#appView").hidden = true; $("#loginView").hidden = false;
+  $("#loginErr").textContent = msg || "";
+}
+$("#btnLogout").addEventListener("click", async () => {
+  try { await api("POST", "logout", {}); } catch {}
+  forceLogout("");
+});
+function enterApp(id) {
+  me = id;
+  const u = USERS[id];
+  if (!u) { forceLogout("Neznámý uživatel."); return; }
+  $("#meAv").textContent = initials(u.name); $("#meAv").style.setProperty("--c", u.color);
+  $("#meName").textContent = u.name;
+  const role = $("#meRole"); role.className = "role" + (u.admin ? " admin" : ""); role.textContent = u.admin ? "Admin" : "Uživatel";
+  $("#loginView").hidden = true; $("#appView").hidden = false;
+  if (!u.admin) { $("#importPanel").hidden = true; $("#addPanel").hidden = true; }
+  render();
+  dataVersion = null; poll();
+}
+
+/* ---------- dates ---------- */
+function parseCz(s) {
+  const m = String(s || "").match(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/);
+  return m ? `${m[3]}-${pad(m[2])}-${pad(m[1])}` : null;
+}
+function isoOf(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function daysUntil(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date();
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5);
+}
+function fmtDate(iso) { if (!iso) return "—"; const [y, m, d] = iso.split("-"); return `${+d}. ${+m}. ${y}`; }
+function fmtStamp(ts) { if (!ts) return ""; const d = new Date(ts); return `${d.getDate()}. ${d.getMonth() + 1}. v ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function ago(ts) {
+  const s = (Date.now() - ts) / 1000;
+  if (s < 60) return "právě teď";
+  if (s < 3600) return `před ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `před ${Math.floor(s / 3600)} h`;
+  return fmtStamp(ts);
+}
+function rel(n) {
+  if (n == null) return "";
+  if (n === 0) return "dnes";
+  if (n === 1) return "zítra";
+  if (n === -1) return "včera";
+  if (n > 1) return `za ${n} ${n < 5 ? "dny" : "dní"}`;
+  return `před ${-n} dny`;
+}
+function plural(n, one, few, many) { return n === 1 ? one : n > 1 && n < 5 ? few : many; }
+
+/* ---------- status ---------- */
+function statusOf(r) { if (r.confirmed) return "done"; return (r.items || []).length ? "waiting" : "missing"; }
+const ST = {
+  missing: { label: "Chybí obsah", k: "var(--red)", ks: "var(--red-soft)" },
+  waiting: { label: "Čeká na nahrání", k: "var(--amber)", ks: "var(--amber-soft)" },
+  done: { label: "Na panelech", k: "var(--green)", ks: "var(--green-soft)" },
+};
+function isUrgent(r) { const d = daysUntil(r.eventDate); return statusOf(r) !== "done" && d != null && d <= URGENT_DAYS && d >= -1; }
+function isPast(r) { const d = daysUntil(r.eventDate); return d != null && d < -1; }
+function pill(s) { return h("span", { class: "pill", style: `--k:${ST[s].k};--ks:${ST[s].ks}` }, ST[s].label); }
+function calTile(r) {
+  const d = daysUntil(r.eventDate);
+  const [, mm, dd] = (r.eventDate || "--").split("-");
+  return h("div", { class: "cal" + (d != null && d >= 0 && d <= URGENT_DAYS ? " soon" : "") },
+    h("span", { class: "m" }, mm ? MONTHS[+mm - 1] : "—"), h("span", { class: "dd" }, dd ? +dd : "?"), h("span", { class: "rl" }, rel(d)));
+}
+function track(r) {
+  const s = statusOf(r), lvl = s === "missing" ? 0 : s === "waiting" ? 1 : 2;
+  return h("div", { class: "track", style: `--k:${ST[s].k};--ks:${ST[s].ks}` },
+    ["Pronájem", "Obsah dodán", "Na panelech"].map((t, i) =>
+      h("div", { class: "step" + (i <= lvl ? " on" : "") + (i === lvl ? " cur" : "") }, h("i", null, i < lvl || s === "done" ? "✓" : ""), t)));
+}
+function who(id) { return (USERS[id] && USERS[id].name) || "Někdo"; }
+function whoColor(id) { return (USERS[id] && USERS[id].color) || "var(--muted)"; }
+
+/* ---------- link providers ---------- */
+const PROVIDERS = [
+  [/uschovna/i, "Úschovna", "ÚS", "#e8590c"],
+  [/wetransfer|we\.tl/i, "WeTransfer", "WT", "#3b5bdb"],
+  [/drive\.google|docs\.google/i, "Google Drive", "GD", "#1a9e5c"],
+  [/dropbox/i, "Dropbox", "DB", "#1971c2"],
+  [/onedrive|sharepoint|1drv/i, "OneDrive", "OD", "#0b6cbd"],
+  [/youtube|youtu\.be/i, "YouTube", "YT", "#e03131"],
+  [/vimeo/i, "Vimeo", "VI", "#1098ad"],
+  [/canva/i, "Canva", "CA", "#7048e8"],
+  [/figma/i, "Figma", "FI", "#c2255c"],
+];
+function provider(url) {
+  let host = "";
+  try { host = new URL(url).hostname.replace(/^www\./, ""); } catch {}
+  for (const [re, name, ab, color] of PROVIDERS) if (re.test(host)) return { name, ab, color, host };
+  return { name: host || "Odkaz", ab: (host[0] || "?").toUpperCase(), color: "#5d6685", host };
+}
+
+/* ---------- writes ---------- */
+function errMsg(e) {
+  const c = e && e.code;
+  if (c === "invalid_argument") return "Uložení se nepovedlo. Nejspíš nemáte oprávnění k úpravám.";
+  if (c === "quota_exceeded") return "Databáze je plná. Smažte staré proběhlé pronájmy.";
+  if (c === "resource_exhausted") return "Příliš mnoho změn najednou, zkuste to za chvíli.";
+  return "Uložení se nepovedlo, zkuste to znovu.";
+}
+
+let toastT;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast("Zkopírováno."); }
+  catch { toast("Kopírování se nepovedlo, označte text ručně."); }
+}
+
+/* ---------- import parsing ---------- */
+function cellLines(el) {
+  const out = [];
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while (w.nextNode()) { const t = w.currentNode.nodeValue.replace(/\s+/g, " ").trim(); if (t && t !== "▶") out.push(t); }
+  return out;
+}
+function parseHTML(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const out = [];
+  doc.querySelectorAll("tr").forEach((tr) => {
+    const cells = [...tr.children].filter((c) => c.tagName === "TD" || c.tagName === "TH").map(cellLines);
+    const i = cells.findIndex((l) => l.length === 1 && /^\d{1,7}$/.test(l[0]));
+    if (i < 0) return;
+    const c = cells.slice(i);
+    if (c.length < 7 || !parseCz(c[1].join(" "))) return;
+    out.push({
+      nexId: c[0][0], reported: parseCz(c[1].join(" ")), customer: c[2].join(" "),
+      contact: c[3].join("\n"), event: c[4].join(" "), eventDate: parseCz(c[5].join(" ")), address: c[6].join(" "),
+    });
+  });
+  return out;
+}
+function parseText(text) {
+  const toks = String(text).split(/\t|\r?\n/).map((s) => s.trim()).filter((s) => s && s !== "▶");
+  const starts = [];
+  for (let i = 0; i < toks.length - 1; i++) if (/^\d{1,7}$/.test(toks[i]) && /^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}$/.test(toks[i + 1])) starts.push(i);
+  return starts.map((s, k) => {
+    const t = toks.slice(s, starts[k + 1] ?? toks.length);
+    const rest = t.slice(3);
+    let di = -1;
+    rest.forEach((x, j) => { if (/^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}$/.test(x)) di = j; });
+    const before = di >= 0 ? rest.slice(0, di) : rest;
+    const mail = before.findIndex((x) => x.includes("@"));
+    const cEnd = mail >= 0 ? mail + 1 : Math.min(1, before.length);
+    return {
+      nexId: t[0], reported: parseCz(t[1]), customer: t[2] || "",
+      contact: before.slice(0, cEnd).join("\n"), event: before.slice(cEnd).join(" "),
+      eventDate: di >= 0 ? parseCz(rest[di]) : null, address: di >= 0 ? rest.slice(di + 1).join(" ") : "",
+    };
+  });
+}
+function showPreview(list) {
+  pending = list;
+  const box = $("#preview");
+  box.replaceChildren();
+  $("#btnImportSave").disabled = !list.length || !isAdmin();
+  if (!list.length) { box.append(h("p", null, "V textu jsem nenašel žádné pronájmy. Zkopírujte řádky tabulky včetně sloupců ID a Datum nahlášení.")); return; }
+  const tb = h("tbody");
+  for (const r of list) {
+    const ex = docs.get(r.nexId);
+    const changed = ex && NEX_FIELDS.some((f) => (ex[f] ?? "") !== (r[f] ?? ""));
+    tb.append(h("tr", null,
+      h("td", null, h("span", { class: "tag" + (ex ? "" : " new") }, ex ? (changed ? "aktualizace" : "beze změny") : "nový")),
+      h("td", { class: "mono" }, r.nexId), h("td", null, r.customer), h("td", null, r.event), h("td", null, fmtDate(r.eventDate))));
+  }
+  box.append(h("table", null, h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "ID"), h("th", null, "Zákazník"), h("th", null, "Akce"), h("th", null, "Datum akce"))), tb));
+}
+async function saveImport() {
+  if (!isAdmin()) return;
+  const rows = pending.filter((r) => {
+    const ex = docs.get(r.nexId);
+    return !ex || NEX_FIELDS.some((f) => (ex[f] ?? "") !== (r[f] ?? ""));
+  });
+  if (!rows.length) { toast("Vše už bylo aktuální."); return; }
+  $("#btnImportSave").disabled = true;
+  const res = await mutate("POST", "rentals/import", { rows });
+  if (!res) { $("#btnImportSave").disabled = false; return; }
+  const parts = [];
+  if (res.created) parts.push(`${res.created} ${plural(res.created, "nový", "nové", "nových")}`);
+  if (res.updated) parts.push(`${res.updated} ${plural(res.updated, "aktualizovaný", "aktualizované", "aktualizovaných")}`);
+  toast(`Uloženo: ${parts.join(", ")}.`);
+  $("#paste").value = ""; $("#preview").replaceChildren(); $("#importPanel").hidden = true;
+}
+
+/* ---------- sidebar ---------- */
+function renderSidebar(all) {
+  const active = all.filter((r) => !isPast(r));
+  const urgent = all.filter(isUrgent).length;
+  const navItem = (id, ic, label, cnt, hot) => h("button", { type: "button", "aria-current": view === id ? "page" : null, onclick: () => { view = id; render(); } },
+    icon(ic, 19), label, cnt != null ? h("span", { class: "cnt" + (hot ? " hot" : "") }, cnt) : null);
+  $("#nav").replaceChildren(
+    h("div", { class: "nav-t" }, "Pracovní plocha"),
+    navItem("overview", "grid", "Přehled", urgent || null, urgent > 0),
+    navItem("list", "list", "Pronájmy", active.length),
+    navItem("calendar", "cal", "Kalendář", null));
+  const cta = $("#sideCta");
+  cta.replaceChildren();
+  if (isAdmin()) {
+    cta.append(h("div", { class: "nav-t" }, "Admin"),
+      h("button", { class: "btn primary", type: "button", disabled: readOnly, onclick: openImport }, icon("down", 17, 2.4), "Vložit z NEXu"),
+      h("button", { class: "btn", type: "button", disabled: readOnly, onclick: openAdd }, icon("plus", 17, 2.4), "Přidat ručně"));
+  }
+}
+function openImport() { view = "list"; render(); $("#importPanel").hidden = false; $("#addPanel").hidden = true; $("#paste").focus(); }
+function openAdd() { view = "list"; render(); $("#addPanel").hidden = false; $("#importPanel").hidden = true; $("#fId").focus(); }
+
+/* ---------- views ---------- */
+function greeting() { const hr = new Date().getHours(); return hr < 10 ? "Dobré ráno" : hr < 18 ? "Dobrý den" : "Dobrý večer"; }
+
+function renderOverview(all) {
+  const active = all.filter((r) => !isPast(r));
+  const week = all.filter((r) => { const d = daysUntil(r.eventDate); return d != null && d >= 0 && d <= 7; });
+  const wDone = week.filter((r) => statusOf(r) === "done").length;
+  const wWait = week.filter((r) => statusOf(r) === "waiting").length;
+  const wMiss = week.length - wDone - wWait;
+  const pct = week.length ? Math.round((wDone / week.length) * 100) : null;
+  const urgent = all.filter(isUrgent).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+  const next = active.filter((r) => daysUntil(r.eventDate) >= 0).sort((a, b) => a.eventDate.localeCompare(b.eventDate))[0];
+
+  const C = 2 * Math.PI * 62;
+  const seg = (n, off, color) => week.length && n ? `<circle cx="75" cy="75" r="62" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="butt" stroke-dasharray="${(n / week.length) * C} ${C}" stroke-dashoffset="${-off * C / week.length}"/>` : "";
+  const ring = h("div", { class: "ring" });
+  ring.innerHTML = `<svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true"><circle cx="75" cy="75" r="62" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="14"/>${seg(wDone, 0, "#4ad9a2")}${seg(wWait, wDone, "#ffc066")}${seg(wMiss, wDone + wWait, "#ff7d92")}</svg>`;
+  ring.append(h("div", { class: "lbl" }, h("b", null, pct == null ? "—" : `${pct} %`), h("span", null, "připraveno")));
+
+  const hero = h("section", { class: "hero" },
+    h("span", { class: "glow a" }), h("span", { class: "glow b" }),
+    ring,
+    h("div", null,
+      h("h2", null, "Příštích 7 dní"),
+      h("p", null, week.length ? `${week.length} ${plural(week.length, "akce", "akce", "akcí")}, z toho ${wDone} ${plural(wDone, "hotová", "hotové", "hotových")} na panelech.` : "V příštím týdnu nejsou žádné akce."),
+      h("div", { class: "legend" },
+        h("span", null, h("i", { style: "background:#4ad9a2" }), `Na panelech ${wDone}`),
+        h("span", null, h("i", { style: "background:#ffc066" }), `Čeká ${wWait}`),
+        h("span", null, h("i", { style: "background:#ff7d92" }), `Chybí ${wMiss}`))),
+    next
+      ? h("button", { class: "next", type: "button", onclick: () => openDrawer(next.id) },
+          h("span", { class: "k" }, "Nejbližší akce"),
+          h("span", { class: "cd" }, h("b", null, daysUntil(next.eventDate) === 0 ? "Dnes" : daysUntil(next.eventDate)), daysUntil(next.eventDate) === 0 ? null : h("span", null, plural(daysUntil(next.eventDate), "den", "dny", "dní"))),
+          h("strong", null, next.event || "Bez názvu akce"),
+          h("small", null, `#${next.nexId} · ${next.customer}`),
+          pill(statusOf(next)))
+      : h("div", { class: "next" }, h("span", { class: "k" }, "Nejbližší akce"), h("strong", null, "Žádná naplánovaná akce")));
+
+  const stats = h("div", { class: "stats" }, ...[
+    { id: "missing", ic: "alert", label: "Chybí obsah", d: "čeká se na klienta", k: "var(--red)", ks: "var(--red-soft)", n: active.filter((r) => statusOf(r) === "missing").length },
+    { id: "waiting", ic: "box", label: "Čeká na nahrání", d: "obsah dodán, nepotvrzeno", k: "var(--amber)", ks: "var(--amber-soft)", n: active.filter((r) => statusOf(r) === "waiting").length },
+    { id: "done", ic: "check", label: "Na panelech", d: "potvrzeno techniky", k: "var(--green)", ks: "var(--green-soft)", n: active.filter((r) => statusOf(r) === "done").length },
+    { id: "urgent", ic: "clock", label: `Do ${URGENT_DAYS} dnů nehotové`, d: "potřebuje pozornost", k: "var(--accent)", ks: "var(--accent-soft)", n: urgent.length },
+  ].map((s) => h("button", { class: "stat" + (s.id === "urgent" && s.n ? " hot" : ""), type: "button", style: `--k:${s.k};--ks:${s.ks}`,
+      onclick: () => { statFilter = s.id; period = "active"; view = "list"; render(); } },
+    h("div", { class: "stat-top" }, h("span", { class: "ic" }, icon(s.ic, 19)), h("span", { class: "n" }, s.n)),
+    h("span", { class: "l" }, s.label), h("span", { class: "d" }, s.d),
+    h("span", { class: "bar" }, h("i", { style: `width:${active.length ? (s.n / active.length) * 100 : 0}%` })))));
+
+  const attention = h("section", { class: "card" },
+    h("div", { class: "card-h" }, h("h3", null, icon("alert", 19), "Vyžaduje pozornost"),
+      h("button", { class: "btn ghost", type: "button", onclick: () => { view = "list"; statFilter = "urgent"; render(); } }, "Vše", icon("chev", 16))),
+    urgent.length
+      ? h("div", { class: "mini" }, urgent.slice(0, 6).map((r) => h("button", { type: "button", onclick: () => openDrawer(r.id) },
+          calTile(r), h("div", { class: "t" }, h("strong", null, r.event || "Bez názvu akce"), h("span", null, `#${r.nexId} · ${r.customer}`)), pill(statusOf(r)))))
+      : h("div", { class: "muted-empty" }, "Nic nehoří. Všechny akce v nejbližších dnech jsou připravené."));
+
+  const acts = [];
+  for (const r of all) {
+    for (const it of r.items || []) acts.push({ at: it.at, by: it.by, id: r.id, txt: "vložil(a) obsah k" });
+    if (r.confirmed) acts.push({ at: r.confirmed.at, by: r.confirmed.by, id: r.id, txt: "potvrdil(a) nahrání" });
+    if (r.createdAt && r.createdBy) acts.push({ at: r.createdAt, by: r.createdBy, id: r.id, txt: "přidal(a) pronájem" });
+  }
+  acts.sort((a, b) => b.at - a.at);
+  const feed = h("section", { class: "card" },
+    h("div", { class: "card-h" }, h("h3", null, icon("bolt", 19), "Poslední aktivita")),
+    acts.length
+      ? h("ul", { class: "feed" }, acts.slice(0, 7).map((a) => h("li", null,
+          h("span", { class: "av xs", style: `--c:${whoColor(a.by)}` }, initials(who(a.by))),
+          h("div", null, h("p", null, h("b", null, who(a.by)), ` ${a.txt} `, h("button", { class: "lnk", type: "button", onclick: () => openDrawer(a.id) }, `#${a.id}`)), h("small", null, ago(a.at))))))
+      : h("div", { class: "muted-empty" }, "Zatím žádná aktivita."));
+
+  const u = USERS[me];
+  return [
+    h("header", { class: "pagehead" },
+      h("div", null, h("p", { class: "eyebrow" }, new Date().toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })),
+        h("h1", null, `${greeting()}, ${u.name.split(" ")[0]}`),
+        h("p", null, urgent.length ? `${urgent.length} ${plural(urgent.length, "pronájem potřebuje", "pronájmy potřebují", "pronájmů potřebuje")} pozornost do ${URGENT_DAYS} dnů.` : "Všechno v nejbližších dnech je v pořádku."))),
+    hero, stats, h("div", { class: "cols" }, attention, feed)];
+}
+
+const PERIODS = [
+  { id: "active", label: "Aktuální", test: (r) => !isPast(r) },
+  { id: "past", label: "Proběhlé", test: isPast },
+  { id: "all", label: "Vše", test: () => true },
+];
+const SFILTERS = [
+  { id: "missing", label: "Chybí obsah", k: "var(--red)", ks: "var(--red-soft)", test: (r) => statusOf(r) === "missing" },
+  { id: "waiting", label: "Čeká na nahrání", k: "var(--amber)", ks: "var(--amber-soft)", test: (r) => statusOf(r) === "waiting" },
+  { id: "done", label: "Na panelech", k: "var(--green)", ks: "var(--green-soft)", test: (r) => statusOf(r) === "done" },
+  { id: "urgent", label: "Blíží se termín", k: "var(--accent)", ks: "var(--accent-soft)", test: isUrgent },
+];
+function renderList(all) {
+  const pdef = PERIODS.find((p) => p.id === period);
+  const inPeriod = all.filter(pdef.test);
+  const sdef = SFILTERS.find((s) => s.id === statFilter);
+  const q = query.toLowerCase();
+  const shown = inPeriod.filter((r) => !sdef || sdef.test(r))
+    .filter((r) => !q || [r.nexId, r.customer, r.event, r.contact, r.address].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => (period === "past" ? -1 : 1) * String(a.eventDate || "9").localeCompare(String(b.eventDate || "9")) || Number(a.nexId) - Number(b.nexId));
+
+  const searchBox = h("label", { class: "search" }, icon("search", 17), h("input", { id: "search", type: "search", placeholder: "Hledat ID, zákazníka, akci…", "aria-label": "Hledat", value: query }));
+  searchBox.querySelector("input").addEventListener("input", (e) => { query = e.target.value.trim(); renderListBody(); });
+
+  const toolbar = h("div", { class: "toolbar" },
+    h("div", { class: "seg", role: "group", "aria-label": "Období" }, PERIODS.map((p) => h("button", { type: "button", "aria-pressed": String(period === p.id), onclick: () => { period = p.id; render(); } }, p.label))),
+    h("div", { class: "chips" }, SFILTERS.map((s) => h("button", { class: "chip", type: "button", style: `--k:${s.k};--ks:${s.ks}`, "aria-pressed": String(statFilter === s.id),
+      onclick: () => { statFilter = statFilter === s.id ? null : s.id; render(); } }, h("i"), s.label, h("b", null, inPeriod.filter(s.test).length)))),
+    searchBox);
+
+  const listEl = h("div", { class: "tickets", id: "tickets" });
+  fillTickets(listEl, shown);
+
+  return [
+    h("header", { class: "pagehead" },
+      h("div", null, h("p", { class: "eyebrow" }, "Pronájmy"), h("h1", null, "Všechny pronájmy"),
+        h("p", null, `${shown.length} ${plural(shown.length, "pronájem", "pronájmy", "pronájmů")} v tomto výběru`)),
+      isAdmin() ? h("div", { class: "actions" },
+        h("button", { class: "btn primary", type: "button", disabled: readOnly, onclick: openImport }, icon("down", 17, 2.4), "Vložit z NEXu"),
+        h("button", { class: "btn", type: "button", disabled: readOnly, onclick: openAdd }, icon("plus", 17, 2.4), "Přidat ručně")) : null),
+    toolbar, listEl];
+}
+function renderListBody() {
+  const el = $("#tickets"); if (!el) return;
+  const all = [...docs.entries()].map(([id, r]) => ({ id, ...r }));
+  const pdef = PERIODS.find((p) => p.id === period);
+  const sdef = SFILTERS.find((s) => s.id === statFilter);
+  const q = query.toLowerCase();
+  const shown = all.filter(pdef.test).filter((r) => !sdef || sdef.test(r))
+    .filter((r) => !q || [r.nexId, r.customer, r.event, r.contact, r.address].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => (period === "past" ? -1 : 1) * String(a.eventDate || "9").localeCompare(String(b.eventDate || "9")) || Number(a.nexId) - Number(b.nexId));
+  fillTickets(el, shown);
+}
+function fillTickets(el, shown) {
+  el.replaceChildren();
+  if (!shown.length) {
+    el.append(h("div", { class: "empty" }, docs.size
+      ? [h("strong", null, "Nic tu není"), "Pro tento filtr nebo hledání nejsou žádné pronájmy."]
+      : [h("strong", null, "Zatím žádné pronájmy"), isAdmin() ? "Klikněte na „Vložit z NEXu“ a vložte zkopírovanou tabulku pronájmů." : "Admin sem brzy přidá pronájmy z NEXu."]));
+    return;
+  }
+  for (const r of shown) {
+    const items = r.items || [];
+    const provs = [...new Map(items.map((it) => { const p = provider(it.url); return [p.name, p]; })).values()].slice(0, 3);
+    el.append(h("button", { class: "ticket" + (isUrgent(r) ? " urgent" : ""), type: "button", onclick: () => openDrawer(r.id) },
+      calTile(r),
+      h("div", { class: "ttl" },
+        h("span", { class: "id" }, `#${r.nexId}`, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
+        h("strong", null, r.event || "Bez názvu akce"),
+        h("span", null, r.customer + (items.length ? ` · ${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : ""))),
+      h("div", { class: "provs" }, provs.map((p) => h("span", { class: "pv", style: `--pc:${p.color}`, title: p.name }, p.ab))),
+      track(r),
+      h("span", { class: "chev" }, icon("chev", 20))));
+  }
+}
+
+function renderCalendar(all) {
+  const days = [];
+  const t = new Date();
+  for (let i = 0; i < 14; i++) { const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i); days.push(d); }
+  const board = h("div", { class: "board" }, days.map((d, i) => {
+    const iso = isoOf(d);
+    const evs = all.filter((r) => r.eventDate === iso);
+    const wd = d.getDay();
+    return h("div", { class: "day" + (i === 0 ? " today" : "") + (wd === 0 || wd === 6 ? " weekend" : "") },
+      h("div", { class: "day-h" }, h("b", null, d.getDate()), h("span", null, i === 0 ? "dnes" : `${WEEKDAYS[wd]} · ${MONTHS[d.getMonth()]}`)),
+      evs.length
+        ? evs.map((r) => { const s = statusOf(r); return h("button", { class: "ev", type: "button", style: `--k:${ST[s].k};--ks:${ST[s].ks}`, onclick: () => openDrawer(r.id) },
+            h("b", null, `#${r.nexId} · ${ST[s].label}`), h("strong", null, r.event || "Bez názvu akce"), h("span", null, r.customer)); })
+        : h("span", { class: "nothing" }, "volno"));
+  }));
+  return [
+    h("header", { class: "pagehead" },
+      h("div", null, h("p", { class: "eyebrow" }, "Kalendář"), h("h1", null, "Příštích 14 dní"),
+        h("p", null, "Barva karty ukazuje stav obsahu. Kliknutím otevřete detail."))),
+    board];
+}
+
+/* ---------- drawer ---------- */
+let dr = null;
+function buildDrawer() {
+  const url = h("input", { class: "in", id: "drUrl", placeholder: "Odkaz na Úschovnu, WeTransfer, Drive…", "aria-label": "Odkaz" });
+  const label = h("input", { class: "in", id: "drLabel", placeholder: "Popis (nepovinné)", "aria-label": "Popis odkazu" });
+  const form = h("form", { class: "addlink" }, url, label, h("button", { class: "btn primary", type: "submit" }, icon("plus", 16, 2.4), "Přidat"));
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!isAdmin() || !openId) return;
+    let u = url.value.trim(); if (!u) { url.focus(); return; }
+    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+    try { new URL(u); } catch { toast("Tohle nevypadá jako platný odkaz."); return; }
+    const id = openId;
+    const lbl = label.value.trim();
+    url.value = ""; label.value = "";
+    mutate("POST", `rentals/${encodeURIComponent(id)}/items`, { url: u, label: lbl });
+  });
+  const note = h("textarea", { class: "in note", id: "drNote", placeholder: "Poznámka pro techniky (které panely, délka spotu, formát…)", "aria-label": "Poznámka" });
+  note.addEventListener("change", () => { const id = openId; if (id && isAdmin()) mutate("PATCH", `rentals/${encodeURIComponent(id)}`, { note: note.value }, "Poznámka uložena."); });
+  dr = { url, label, form, note, delArm: false, justConfirmed: false };
+}
+function openDrawer(id) {
+  if (!dr) buildDrawer();
+  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.delArm = false; }
+  openId = id;
+  const root = $("#drawerRoot");
+  root.hidden = false;
+  renderDrawer();
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add("drawer-open")));
+  setTimeout(() => $("#drClose") && $("#drClose").focus(), 60);
+}
+function closeDrawer() {
+  const root = $("#drawerRoot");
+  if (root.hidden) return;
+  root.classList.remove("drawer-open");
+  openId = null;
+  setTimeout(() => { if (!openId) root.hidden = true; }, 260);
+}
+$("#backdrop").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+
+function renderDrawer() {
+  if (!openId || !dr) return;
+  const r0 = docs.get(openId);
+  const drawer = $("#drawer");
+  if (!r0) { closeDrawer(); return; }
+  const r = { id: openId, ...r0 };
+  const s = statusOf(r), d = daysUntil(r.eventDate), urgent = isUrgent(r), items = r.items || [];
+  const admin = isAdmin() && !readOnly;
+
+  const top = h("div", { class: "dr-top" },
+    h("span", { class: "id" }, `Pronájem #${r.nexId}`),
+    h("div", { class: "row-actions" }, pill(s),
+      h("button", { class: "btn ghost icon", id: "drClose", type: "button", "aria-label": "Zavřít", onclick: closeDrawer }, icon("close", 20))));
+
+  const title = h("div", { class: "dr-title" },
+    h("h2", null, r.event || "Bez názvu akce"),
+    h("p", null, r.customer),
+    h("div", { class: "facts" },
+      h("span", { class: "fact" + (d != null && d >= 0 && d <= URGENT_DAYS ? " soon" : "") }, icon("cal", 15), fmtDate(r.eventDate), d != null ? ` · ${rel(d)}` : ""),
+      r.address ? h("span", { class: "fact" }, icon("pin", 15), r.address) : null));
+
+  const files = h("section", null,
+    h("p", { class: "sec-t" }, h("span", null, "Obsah ke stažení"), h("span", null, items.length ? `${items.length} ${plural(items.length, "odkaz", "odkazy", "odkazů")}` : "")),
+    items.length
+      ? h("ul", { class: "files" }, items.map((it) => {
+          const p = provider(it.url);
+          return h("li", { class: "file" },
+            h("span", { class: "pv lg", style: `--pc:${p.color}` }, p.ab),
+            h("strong", null, it.label || p.name),
+            h("span", { class: "meta" }, `${p.host} · ${who(it.by)}, ${fmtStamp(it.at)}`),
+            h("div", { class: "fa" },
+              h("a", { class: "btn primary", href: it.url, target: "_blank", rel: "noopener noreferrer" }, icon("ext", 15, 2.2), "Otevřít"),
+              h("button", { class: "btn ghost icon", type: "button", title: "Kopírovat odkaz", "aria-label": "Kopírovat odkaz", onclick: () => copy(it.url) }, icon("copy", 16)),
+              admin ? h("button", { class: "btn ghost icon danger", type: "button", title: "Odebrat odkaz", "aria-label": "Odebrat odkaz",
+                onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/items/${encodeURIComponent(it.id)}`) }, icon("trash", 16)) : null));
+        }))
+      : h("div", { class: "empty-files" }, admin ? "Zatím žádný obsah. Vložte odkaz, který poslal klient." : "Obsah zatím nebyl dodán. Jakmile ho admin vloží, objeví se tady."),
+    admin ? dr.form : null);
+
+  if (document.activeElement !== dr.note) dr.note.value = r.note || "";
+  const noteSec = admin
+    ? h("section", null, h("p", { class: "sec-t" }, "Poznámka pro techniky"), dr.note)
+    : (r.note ? h("section", null, h("p", { class: "sec-t" }, "Poznámka od admina"), h("div", { class: "note-ro" }, r.note)) : null);
+
+  let confirm;
+  if (r.confirmed) {
+    const canUndo = !readOnly && (isAdmin() || r.confirmed.by === me);
+    confirm = h("section", { class: "confirm ok" + (dr.justConfirmed ? " pop" : "") },
+      h("div", { class: "okline" }, h("span", { class: "ck" }, icon("check", 22, 3)),
+        h("div", null, "Obsah je nahraný na panelech", h("p", null, `${who(r.confirmed.by)}, ${fmtStamp(r.confirmed.at)}`))),
+      canUndo ? h("div", null, h("button", { class: "btn ghost", type: "button", onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/confirm`) }, icon("undo", 16), "Vrátit zpět")) : null);
+    dr.justConfirmed = false;
+  } else {
+    confirm = h("section", { class: "confirm" },
+      h("p", null, items.length
+        ? (urgent ? `Akce je ${rel(d)}. Po nahrání obsahu na panely to prosím potvrďte.` : "Po nahrání obsahu na panely to potvrďte tímto tlačítkem.")
+        : "Obsah zatím chybí. Potvrdit jde i tak, pokud dorazil jinou cestou."),
+      h("button", { class: "btn go" + (urgent && items.length ? " blink" : ""), type: "button", disabled: readOnly,
+        onclick: () => { dr.justConfirmed = true; mutate("POST", `rentals/${encodeURIComponent(r.id)}/confirm`, {}); } },
+        icon("check", 18, 2.6), "Obsah je nahraný na panelech"));
+  }
+
+  const contactLines = String(r.contact || "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const info = h("section", null, h("p", { class: "sec-t" }, "Údaje z NEXu"),
+    h("dl", { class: "info" },
+      h("dt", null, "Zákazník"), h("dd", null, r.customer || "—"),
+      h("dt", null, "Kontakt"), h("dd", null, contactLines.length ? contactLines.map((l, i) => h("span", { class: "cline" }, i === 0 ? h("b", null, l) : l,
+        i > 0 ? h("button", { class: "btn ghost icon", type: "button", title: "Kopírovat", "aria-label": `Kopírovat ${l}`, onclick: () => copy(l) }, icon("copy", 14)) : null)) : "—"),
+      h("dt", null, "Akce"), h("dd", null, r.event || "—"),
+      h("dt", null, "Datum akce"), h("dd", null, fmtDate(r.eventDate)),
+      h("dt", null, "Místo"), h("dd", null, r.address || "—"),
+      h("dt", null, "Nahlášeno"), h("dd", null, fmtDate(r.reported))));
+
+  let danger = null;
+  if (admin) {
+    danger = h("div", { class: "danger-zone" });
+    if (dr.delArm) danger.append("Opravdu smazat pronájem i s odkazy?",
+      h("button", { class: "btn danger", type: "button", onclick: () => { const id = r.id; dr.delArm = false; closeDrawer(); mutate("DELETE", `rentals/${encodeURIComponent(id)}`, undefined, `Pronájem #${id} smazán.`); } }, "Ano, smazat"),
+      h("button", { class: "btn ghost", type: "button", onclick: () => { dr.delArm = false; renderDrawer(); } }, "Ne"));
+    else danger.append(h("button", { class: "btn ghost danger", type: "button", onclick: () => { dr.delArm = true; renderDrawer(); } }, icon("trash", 16), "Smazat pronájem"));
+  }
+
+  const scroller = drawer.querySelector(".dr-body");
+  const scrollTop = scroller ? scroller.scrollTop : 0;
+  drawer.replaceChildren(top, h("div", { class: "dr-body" },
+    title, h("div", { class: "dr-track" }, track(r)), confirm, files, noteSec, info, danger));
+  drawer.querySelector(".dr-body").scrollTop = scrollTop;
+}
+
+/* ---------- render ---------- */
+let renderSeq = 0;
+async function render() {
+  if (!me) return;
+  const seq = ++renderSeq;
+  const all = [...docs.entries()].map(([id, r]) => ({ id, ...r }));
+
+  if (seq !== renderSeq) return;
+
+  renderSidebar(all);
+  if (!isAdmin()) { $("#importPanel").hidden = true; $("#addPanel").hidden = true; }
+  const v = $("#view");
+  const hadFocus = document.activeElement && document.activeElement.id === "search";
+  const nodes = view === "overview" ? renderOverview(all) : view === "calendar" ? renderCalendar(all) : renderList(all);
+  v.replaceChildren(h("div", { style: "display:flex;flex-direction:column;gap:24px" }, nodes));
+  if (hadFocus && $("#search")) { const s = $("#search"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  renderDrawer();
+}
+
+/* ---------- UI wiring ---------- */
+$("#btnImportCancel").addEventListener("click", () => { $("#importPanel").hidden = true; });
+$("#btnAddCancel").addEventListener("click", () => { $("#addPanel").hidden = true; });
+$("#btnImportSave").addEventListener("click", saveImport);
+$("#paste").addEventListener("paste", (e) => {
+  const html = e.clipboardData.getData("text/html");
+  const text = e.clipboardData.getData("text/plain");
+  let list = html ? parseHTML(html) : [];
+  if (!list.length) list = parseText(text);
+  e.preventDefault();
+  $("#paste").value = text;
+  showPreview(list);
+});
+let pasteT;
+$("#paste").addEventListener("input", () => { clearTimeout(pasteT); pasteT = setTimeout(() => showPreview(parseText($("#paste").value)), 400); });
+$("#addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!isAdmin()) return;
+  const id = $("#fId").value.trim();
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) { toast("ID může obsahovat jen písmena, čísla, - a _."); return; }
+  if (docs.has(id)) { toast(`Pronájem ${id} už existuje.`); return; }
+  const res = await mutate("POST", "rentals", {
+    nexId: id, customer: $("#fCustomer").value.trim(), contact: $("#fContact").value.trim(),
+    event: $("#fEvent").value.trim(), eventDate: $("#fDate").value, address: $("#fAddress").value.trim(),
+  });
+  if (!res) return;
+  e.target.reset(); $("#addPanel").hidden = true; toast(`Pronájem ${id} přidán.`);
+});
+setInterval(() => { if (me && docs.size && !document.activeElement?.matches("input, textarea")) render(); }, 15 * 60 * 1000);
+
+/* ---------- boot ---------- */
+(async () => {
+  try {
+    const list = await api("GET", "users");
+    USERS = Object.fromEntries(list.map((u) => [u.id, u]));
+  } catch (e) {
+    $("#loginErr").textContent = "Nepodařilo se načíst uživatele: " + e.message;
+  }
+  renderWho();
+  try { const u = await api("GET", "me"); enterApp(u.id); } catch {}
+})();
+</script>

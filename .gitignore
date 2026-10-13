@@ -1,0 +1,7 @@
+# tajné a lokální soubory — nikdy do gitu
+users.local.json
+.dev.vars
+*.local.sql
+.wrangler/
+node_modules/
+.claude/
