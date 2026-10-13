@@ -374,6 +374,17 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 .selfbox.perm.on .switch { background: var(--green); }
 .selfbox.static { cursor: default; }
 .perm-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.tnotes { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tnote { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); }
+.tnote.mine { background: var(--accent-soft); }
+.tnote p { margin: 2px 0 0; white-space: pre-line; overflow-wrap: anywhere; font-size: 14px; }
+.tn-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.tn-h small { color: var(--muted); font-size: 12px; }
+.tnote .btn { padding: 4px; }
+.tnote-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.tnote-in { min-height: 46px; resize: vertical; }
+.tnote-hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+@media (max-width: 900px) { .tnote-form { grid-template-columns: 1fr; } }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
 
 .empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
@@ -602,8 +613,8 @@ async function mutate(method, path, body, okMsg) {
   catch (e) { toast(e.message); return null; }
 }
 let polling = false;
-async function poll() {
-  if (!me || polling || document.hidden) return;
+async function poll(force) {
+  if (!me || polling || (document.hidden && !force)) return;
   polling = true;
   try {
     const data = await api("GET", "rentals" + (dataVersion != null ? `?v=${dataVersion}` : ""));
@@ -680,7 +691,7 @@ function enterApp(id) {
   $("#loginView").hidden = true; $("#appView").hidden = false;
   if (!u.admin) { $("#importPanel").hidden = true; $("#addPanel").hidden = true; }
   render();
-  dataVersion = null; poll();
+  dataVersion = null; poll(true);
   refreshMe(false);
 }
 
@@ -775,6 +786,10 @@ function extractLinks(text, existing) {
   return out;
 }
 function fmtSize(n) { return n < 1000 ? `${n} B` : `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(".", ",")} kB`; }
+function noteCount(r) {
+  const n = (r.teamNotes || []).length;
+  return n ? ` · ${n} ${plural(n, "poznámka", "poznámky", "poznámek")}` : "";
+}
 function contentCount(r) {
   const n = (r.items || []).length, f = (r.files || []).length;
   const parts = [];
@@ -961,6 +976,7 @@ function renderOverview(all) {
   for (const r of all) {
     for (const it of r.items || []) acts.push({ at: it.at, by: it.by, id: r.id, txt: "vložil(a) obsah k" });
     for (const f of r.files || []) acts.push({ at: f.at, by: f.by, id: r.id, txt: "nahrál(a) soubor k" });
+    for (const n of r.teamNotes || []) acts.push({ at: n.at, by: n.by, id: r.id, txt: "napsal(a) poznámku k" });
     if (r.confirmed) acts.push({ at: r.confirmed.at, by: r.confirmed.by, id: r.id, txt: "potvrdil(a) nahrání" });
     if (r.createdAt && r.createdBy) acts.push({ at: r.createdAt, by: r.createdBy, id: r.id, txt: "přidal(a) pronájem" });
   }
@@ -1051,7 +1067,7 @@ function fillTickets(el, shown) {
       h("div", { class: "ttl" },
         h("span", { class: "id" }, `#${r.nexId}`, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
         h("strong", null, r.event || "Bez názvu akce"),
-        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : ""))),
+        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : "") + noteCount(r))),
       h("div", { class: "provs" }, provs.map((p) => h("span", { class: "pv", style: `--pc:${p.color}`, title: p.name }, p.ab))),
       track(r),
       h("span", { class: "chev" }, icon("chev", 20))));
@@ -1136,11 +1152,14 @@ function buildDrawer() {
   note.addEventListener("change", () => { const id = openId; if (id && isAdmin()) mutate("PATCH", `rentals/${encodeURIComponent(id)}`, { note: note.value }, "Poznámka uložena."); });
   const fileInput = h("input", { type: "file", accept: ".txt,text/plain", hidden: true, id: "drFile" });
   fileInput.addEventListener("change", () => { if (fileInput.files[0]) pickFile(fileInput.files[0]); fileInput.value = ""; });
-  dr = { url, label, form, note, fileInput, upload: null, uploading: false, delArm: false, justConfirmed: false };
+  const teamInput = h("textarea", { class: "in tnote-in", id: "drTeamNote", rows: "2", maxlength: "1000",
+    placeholder: "Napište poznámku pro tým, např. klientka slíbila obsah do pátku…", "aria-label": "Nová poznámka týmu" });
+  teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addTeamNote(); } });
+  dr = { url, label, form, note, teamInput, fileInput, upload: null, uploading: false, delArm: false, justConfirmed: false };
 }
 function openDrawer(id) {
   if (!dr) buildDrawer();
-  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.delArm = false; dr.upload = null; }
+  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.teamInput.value = ""; dr.delArm = false; dr.upload = null; }
   openId = id;
   const root = $("#drawerRoot");
   root.hidden = false;
@@ -1185,6 +1204,14 @@ async function uploadFile() {
   dr.uploading = false;
   if (res) { dr.upload = null; toast(added ? `Soubor nahrán a přidáno ${added} ${plural(added, "odkaz", "odkazy", "odkazů")}.` : "Soubor nahrán."); }
   renderDrawer();
+}
+
+async function addTeamNote() {
+  const id = openId, text = dr.teamInput.value.trim();
+  if (!id || !text) { dr.teamInput.focus(); return; }
+  dr.teamInput.value = "";
+  const res = await mutate("POST", `rentals/${encodeURIComponent(id)}/notes`, { text });
+  if (!res && !dr.teamInput.value) dr.teamInput.value = text;
 }
 
 function uploadUi() {
@@ -1282,6 +1309,22 @@ function renderDrawer() {
     ? h("section", null, h("p", { class: "sec-t" }, "Poznámka pro techniky"), dr.note)
     : (r.note ? h("section", null, h("p", { class: "sec-t" }, "Poznámka od admina"), h("div", { class: "note-ro" }, r.note)) : null);
 
+  const tn = r.teamNotes || [];
+  const teamSec = h("section", null,
+    h("p", { class: "sec-t" }, h("span", null, "Poznámky týmu"), h("span", null, tn.length ? String(tn.length) : "")),
+    tn.length
+      ? h("ul", { class: "tnotes" }, tn.map((n) => h("li", { class: "tnote" + (n.by === me ? " mine" : "") },
+          h("span", { class: "av xs", style: `--c:${whoColor(n.by)}` }, initials(who(n.by))),
+          h("div", null, h("div", { class: "tn-h" }, h("b", null, who(n.by)), h("small", null, ago(n.at))), h("p", null, n.text)),
+          isAdmin() || n.by === me
+            ? h("button", { class: "btn ghost icon danger", type: "button", title: "Smazat poznámku", "aria-label": "Smazat poznámku",
+                onclick: () => mutate("DELETE", `rentals/${encodeURIComponent(r.id)}/notes/${encodeURIComponent(n.id)}`) }, icon("trash", 15))
+            : null)))
+      : h("div", { class: "empty-files", style: "padding:14px;margin-bottom:10px" }, "Zatím žádná poznámka. Zapište třeba, kdy klient slíbil dodat obsah."),
+    h("div", { class: "tnote-form" }, dr.teamInput,
+      h("button", { class: "btn primary", type: "button", onclick: addTeamNote }, icon("plus", 16, 2.4), "Přidat")),
+    h("p", { class: "tnote-hint" }, "Odeslat můžete i zkratkou Ctrl+Enter. Poznámku vidí celý tým."));
+
   let confirm;
   if (r.confirmed) {
     const canUndo = !readOnly && (isAdmin() || r.confirmed.by === me);
@@ -1325,7 +1368,7 @@ function renderDrawer() {
   const scroller = drawer.querySelector(".dr-body");
   const scrollTop = scroller ? scroller.scrollTop : 0;
   drawer.replaceChildren(top, h("div", { class: "dr-body" },
-    title, h("div", { class: "dr-track" }, track(r)), selfSec, confirm, files, noteSec, info, danger));
+    title, h("div", { class: "dr-track" }, track(r)), selfSec, confirm, teamSec, files, noteSec, info, danger));
   drawer.querySelector(".dr-body").scrollTop = scrollTop;
 }
 

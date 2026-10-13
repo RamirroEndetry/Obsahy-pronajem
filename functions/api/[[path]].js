@@ -114,16 +114,22 @@ async function version(env) {
 }
 
 async function listRentals(env) {
-  const [rs, its, fs, ver] = await env.DB.batch([
+  const [rs, its, fs, ns, ver] = await env.DB.batch([
     env.DB.prepare("SELECT * FROM rentals"),
     env.DB.prepare("SELECT * FROM items ORDER BY created_at"),
     env.DB.prepare("SELECT id, rental_id, name, size, created_by, created_at FROM files ORDER BY created_at"),
+    env.DB.prepare("SELECT * FROM notes ORDER BY created_at"),
     env.DB.prepare("SELECT v FROM meta WHERE k = 'version'"),
   ]);
   const byRental = new Map();
   for (const it of its.results) {
     if (!byRental.has(it.rental_id)) byRental.set(it.rental_id, []);
     byRental.get(it.rental_id).push({ id: it.id, url: it.url, label: it.label, by: it.created_by, at: it.created_at });
+  }
+  const notesByRental = new Map();
+  for (const n of ns.results) {
+    if (!notesByRental.has(n.rental_id)) notesByRental.set(n.rental_id, []);
+    notesByRental.get(n.rental_id).push({ id: n.id, text: n.text, by: n.created_by, at: n.created_at });
   }
   const filesByRental = new Map();
   for (const f of fs.results) {
@@ -137,6 +143,7 @@ async function listRentals(env) {
       event: r.event, eventDate: r.event_date, address: r.address, note: r.note,
       items: byRental.get(r.id) || [],
       files: filesByRental.get(r.id) || [],
+      teamNotes: notesByRental.get(r.id) || [],
       confirmed: r.confirmed_at ? { by: r.confirmed_by, at: r.confirmed_at } : null,
       selfUpload: r.self_upload ? { by: r.self_by, at: r.self_at } : null,
       createdBy: r.created_by, createdAt: r.created_at,
@@ -223,6 +230,7 @@ async function rentals(req, env, me, parts) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM items WHERE rental_id = ?").bind(id),
       env.DB.prepare("DELETE FROM files WHERE rental_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM notes WHERE rental_id = ?").bind(id),
       env.DB.prepare("DELETE FROM rentals WHERE id = ?").bind(id),
       bump(env),
     ]);
@@ -297,6 +305,32 @@ async function rentals(req, env, me, parts) {
     const denied = await canRemove("items", parts[2]); if (denied) return denied;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM items WHERE id = ? AND rental_id = ?").bind(parts[2], id),
+      touch, bump(env),
+    ]);
+    return json(await listRentals(env));
+  }
+
+  // POST /api/rentals/:id/notes  { text } — poznámku týmu smí přidat každý přihlášený
+  if (parts.length === 2 && parts[1] === "notes" && method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const text = clean(body.text, 1000);
+    if (!text) return fail(400, "Poznámka je prázdná.");
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO notes (id, rental_id, text, created_by, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(randomId(8), id, text, me.id, now),
+      touch, bump(env),
+    ]);
+    return json(await listRentals(env), 201);
+  }
+
+  // DELETE /api/rentals/:id/notes/:noteId — autor nebo admin
+  if (parts.length === 3 && parts[1] === "notes" && method === "DELETE") {
+    if (!me.admin) {
+      const row = await env.DB.prepare("SELECT created_by FROM notes WHERE id = ? AND rental_id = ?").bind(parts[2], id).first();
+      if (!row || row.created_by !== me.id) return fail(403, "Smazat můžete jen svou poznámku.");
+    }
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM notes WHERE id = ? AND rental_id = ?").bind(parts[2], id),
       touch, bump(env),
     ]);
     return json(await listRentals(env));
