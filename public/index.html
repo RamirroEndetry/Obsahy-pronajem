@@ -401,6 +401,25 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 .hseg button:hover { color: var(--hero-ink); }
 .hseg button[aria-pressed="true"] { background: #ffffff; color: #0b1130; }
 .mini .urg { margin-top: 2px; }
+.bell { position: relative; }
+.bell-n { position: absolute; top: 1px; right: 1px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: var(--red); color: #fff; font: 700 10px/17px var(--f-body); text-align: center; box-shadow: 0 0 0 2px var(--surface-2); }
+.npanel { position: fixed; left: 276px; bottom: 20px; width: min(400px, calc(100% - 32px)); max-height: min(70vh, 600px); background: var(--surface); border: 1.5px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-lg); z-index: 30; display: flex; flex-direction: column; overflow: hidden; }
+.np-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 12px 12px 18px; border-bottom: 1px solid var(--line); }
+.np-h strong { font: 700 17px var(--f-display); }
+.np-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.np-item { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 10px; border-radius: 12px; }
+.np-item.unread { background: var(--accent-soft); }
+.np-item p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.np-item small { color: var(--muted); font-size: 12px; }
+.np-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 4px; }
+.np-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 2px 7px; font: 600 12px var(--f-mono); color: var(--accent); cursor: pointer; }
+.np-chip:hover { border-color: var(--accent); }
+.np-chip.gone { color: var(--muted); cursor: default; text-decoration: line-through; }
+.np-more { font-size: 12px; color: var(--muted); align-self: center; }
+.np-foot { padding: 12px 16px; border-top: 1px solid var(--line); margin: 0; }
+.np-hint { font-size: 12px; color: var(--muted); }
+.newtag { font: 700 10px/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); }
+@media (max-width: 900px) { .npanel { left: 16px; right: 16px; width: auto; top: calc(70px + env(safe-area-inset-top, 0px)); bottom: auto; } }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
 
 .empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
@@ -486,6 +505,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
     <div class="usercard">
       <span class="av sm" id="meAv"></span>
       <div><strong id="meName"></strong><span class="role" id="meRole"></span></div>
+      <button class="btn ghost icon bell" id="btnBell" type="button" title="Upozornění" aria-label="Upozornění"><b class="bell-n" id="bellN" hidden></b></button>
       <button class="btn ghost icon" id="btnLogout" type="button" title="Odhlásit" aria-label="Odhlásit"></button>
     </div>
   </aside>
@@ -528,6 +548,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
   <div class="backdrop" id="backdrop"></div>
   <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detail pronájmu"></aside>
 </div>
+<div class="npanel" id="npanel" role="dialog" aria-label="Upozornění" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -571,6 +592,7 @@ const ICONS = {
   chev: '<path d="m9 6 6 6-6 6"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.6 0 4.5 1.8 4.5 4.5"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   client: '<circle cx="9" cy="7" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M18 8v6M15 11h6"/>',
 };
 function icon(name, size = 18, sw = 2) {
@@ -609,6 +631,98 @@ async function refreshMe(notify) {
     }
   } catch {}
 }
+/* ---------- notifications ---------- */
+let notifs = { unread: 0, items: [] };
+const seenNotifs = new Set();
+let notifsLoaded = false, npanelOpen = false;
+const APP_TITLE = "Obsahy pronájmů";
+function noticeText(n) { return `${who(n.by)} ${n.text}`; }
+function unreadRentalIds() {
+  const ids = new Set();
+  for (const n of notifs.items) if (!n.read) n.rentalIds.forEach((i) => ids.add(i));
+  return ids;
+}
+function updateBell() {
+  const b = $("#bellN");
+  b.hidden = !notifs.unread;
+  b.textContent = notifs.unread > 9 ? "9+" : String(notifs.unread);
+  $("#btnBell").setAttribute("aria-label", notifs.unread ? `Upozornění, nepřečtená: ${notifs.unread}` : "Upozornění");
+  document.title = (notifs.unread ? `(${notifs.unread}) ` : "") + APP_TITLE;
+}
+function announce(list) {
+  const n = list[0];
+  toast(noticeText(n) + (list.length > 1 ? ` (a další ${list.length - 1})` : ""));
+  if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
+    try {
+      const sn = new Notification(n.rentalIds.length === 1 ? "Nový pronájem" : "Nové pronájmy", {
+        body: noticeText(n), icon: "/icon-192.png", tag: "obsahy-" + n.id,
+      });
+      sn.onclick = () => { window.focus(); if (n.rentalIds.length === 1) openDrawer(n.rentalIds[0]); else { view = "list"; render(); } sn.close(); };
+    } catch {}
+  }
+}
+async function loadNotifs() {
+  if (!me) return;
+  let data;
+  try { data = await api("GET", "notifications"); } catch { return; }
+  const fresh = data.items.filter((n) => !n.read && !seenNotifs.has(n.id));
+  data.items.forEach((n) => seenNotifs.add(n.id));
+  const changed = fresh.length || data.unread !== notifs.unread || !notifsLoaded;
+  notifs = data;
+  updateBell();
+  if (notifsLoaded && fresh.length) announce(fresh);
+  notifsLoaded = true;
+  if (npanelOpen) renderNPanel();
+  if (changed) render();
+}
+async function markAllRead() {
+  const prev = new Set(notifs.items.filter((n) => !n.read).map((n) => n.id));
+  try {
+    const d = await api("POST", "notifications/read", {});
+    d.items.forEach((n) => { if (prev.has(n.id)) n.fresh = true; });
+    notifs = d;
+    updateBell(); render();
+    if (npanelOpen) renderNPanel();
+  } catch {}
+}
+function toggleNPanel(force) {
+  npanelOpen = force === undefined ? !npanelOpen : force;
+  $("#npanel").hidden = !npanelOpen;
+  if (npanelOpen) { renderNPanel(); if (notifs.unread) markAllRead(); }
+}
+function renderNPanel() {
+  const perm = "Notification" in window ? Notification.permission : "unsupported";
+  const chips = (n) => n.rentalIds.length
+    ? h("div", { class: "np-chips" },
+        n.rentalIds.slice(0, 8).map((id) => docs.has(id)
+          ? h("button", { class: "np-chip", type: "button", onclick: () => { toggleNPanel(false); openDrawer(id); } }, `#${id}`)
+          : h("span", { class: "np-chip gone", title: "Pronájem už neexistuje" }, `#${id}`)),
+        n.rentalIds.length > 8 ? h("span", { class: "np-more" }, `+${n.rentalIds.length - 8}`) : null)
+    : null;
+  $("#npanel").replaceChildren(
+    h("div", { class: "np-h" }, h("strong", null, "Upozornění"),
+      h("button", { class: "btn ghost icon", type: "button", "aria-label": "Zavřít upozornění", onclick: () => toggleNPanel(false) }, icon("close", 18))),
+    notifs.items.length
+      ? h("ul", { class: "np-list" }, notifs.items.map((n) => h("li", { class: "np-item" + (!n.read || n.fresh ? " unread" : "") },
+          h("span", { class: "av xs", style: `--c:${whoColor(n.by)}` }, initials(who(n.by))),
+          h("div", null, h("p", null, h("b", null, who(n.by)), " ", n.text), chips(n), h("small", null, ago(n.at))))))
+      : h("div", { class: "muted-empty", style: "margin:12px" }, isAdmin() ? "Upozornění dostávají ostatní, když přidáte nový pronájem." : "Zatím žádná upozornění. Ozvu se, až admin přidá nový pronájem."),
+    perm === "default"
+      ? h("div", { class: "np-foot" }, h("button", { class: "btn", type: "button",
+          onclick: async () => { try { await Notification.requestPermission(); } catch {} renderNPanel(); } }, icon("bell", 16), "Zapnout upozornění ve Windows / telefonu"))
+      : perm === "denied"
+      ? h("p", { class: "np-foot np-hint" }, "Systémová upozornění jsou v prohlížeči zablokovaná. Povolíte je v nastavení webu (ikona vlevo od adresy).")
+      : perm === "granted"
+      ? h("p", { class: "np-foot np-hint" }, "Systémová upozornění jsou zapnutá, ukážou se i na jiné záložce.")
+      : null);
+}
+$("#btnBell").prepend(icon("bell", 18));
+$("#btnBell").addEventListener("click", (e) => { e.stopPropagation(); toggleNPanel(); });
+document.addEventListener("click", (e) => {
+  if (npanelOpen && !e.target.closest("#npanel") && !e.target.closest("#btnBell")) toggleNPanel(false);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && npanelOpen) toggleNPanel(false); });
+
 async function loadTeam() {
   try { team = await api("GET", "team"); render(); } catch (e) { toast(e.message); }
 }
@@ -646,6 +760,7 @@ async function poll(force) {
     if (data.unchanged) setSync("live", "Synchronizováno");
     else {
       applyList(data);
+      loadNotifs();
       if (!isAdmin()) refreshMe(true);
       else if (view === "team") loadTeam();
     }
@@ -697,7 +812,10 @@ $("#pin").addEventListener("input", () => { if (pick && $("#pin").value.replace(
 $("#btnLogout").append(icon("logout", 18));
 function forceLogout(msg) {
   closeDrawer();
-  me = null; pick = null; docs = new Map(); dataVersion = null; myCanUpload = false; team = null; view = "overview"; renderWho();
+  me = null; pick = null; docs = new Map(); dataVersion = null; myCanUpload = false; team = null; view = "overview";
+  notifs = { unread: 0, items: [] }; seenNotifs.clear(); notifsLoaded = false;
+  if (npanelOpen) toggleNPanel(false);
+  updateBell(); renderWho();
   $("#appView").hidden = true; $("#loginView").hidden = false;
   $("#loginErr").textContent = msg || "";
   if (window.kickScene) window.kickScene();
@@ -719,6 +837,7 @@ function enterApp(id) {
   render();
   dataVersion = null; poll(true);
   refreshMe(false);
+  loadNotifs();
 }
 
 /* ---------- dates ---------- */
@@ -1098,6 +1217,7 @@ function renderListBody() {
 }
 function fillTickets(el, shown) {
   el.replaceChildren();
+  const newIds = unreadRentalIds();
   if (!shown.length) {
     el.append(h("div", { class: "empty" }, docs.size
       ? [h("strong", null, "Nic tu není"), "Pro tento filtr nebo hledání nejsou žádné pronájmy."]
@@ -1110,7 +1230,7 @@ function fillTickets(el, shown) {
     el.append(h("button", { class: "ticket" + (isUrgent(r) ? " urgent" : ""), type: "button", onclick: () => openDrawer(r.id) },
       calTile(r),
       h("div", { class: "ttl" },
-        h("span", { class: "id" }, `#${r.nexId}`, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
+        h("span", { class: "id" }, `#${r.nexId}`, newIds.has(r.id) ? h("span", { class: "newtag" }, "Nový") : null, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
         h("strong", null, r.event || "Bez názvu akce"),
         h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : "") + noteCount(r))),
       h("div", { class: "provs" }, provs.map((p) => h("span", { class: "pv", style: `--pc:${p.color}`, title: p.name }, p.ab))),

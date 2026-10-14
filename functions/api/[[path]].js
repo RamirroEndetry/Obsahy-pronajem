@@ -195,8 +195,9 @@ async function rentals(req, env, me, parts) {
       "customer = excluded.customer, contact = excluded.contact, event = excluded.event, " +
       "event_date = excluded.event_date, address = excluded.address, updated_at = excluded.updated_at",
     ).bind(String(r.nexId), ...rentalFields(r), me.id, now, now));
-    await env.DB.batch([...stmts, bump(env)]);
-    const created = valid.filter((r) => !existing.has(String(r.nexId))).length;
+    const fresh = valid.filter((r) => !existing.has(String(r.nexId)));
+    await env.DB.batch([...stmts, ...newRentalNotices(env, me, fresh), bump(env)]);
+    const created = fresh.length;
     return json({ created, updated: valid.length - created, ...(await listRentals(env)) });
   }
 
@@ -213,6 +214,7 @@ async function rentals(req, env, me, parts) {
         "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at, " +
         "self_upload, self_by, self_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(id, ...rentalFields(r), me.id, now, now, self, self ? me.id : null, self ? now : null),
+      ...newRentalNotices(env, me, [{ ...r, nexId: id }]),
       bump(env),
     ]);
     return json(await listRentals(env), 201);
@@ -358,6 +360,57 @@ async function rentals(req, env, me, parts) {
   return fail(404, "Neznámá adresa.");
 }
 
+/* ---------- notifications ---------- */
+const NOTICE_KEEP_MS = 60 * 86400 * 1000;
+
+// Upozornění všem ostatním uživatelům, že přibyly nové pronájmy (vrací SQL příkazy do dávky).
+function newRentalNotices(env, me, rows) {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => String(r.nexId));
+  const first = rows[0];
+  const text = rows.length === 1
+    ? `přidal(a) nový pronájem #${ids[0]}${first.customer ? " – " + clean(first.customer, 120) : ""}${first.eventDate ? ` (akce ${cleanDate(first.eventDate).split("-").reverse().map(Number).join(". ")})` : ""}`
+    : `přidal(a) ${rows.length} ${rows.length < 5 ? "nové pronájmy" : "nových pronájmů"}`;
+  const now = Date.now();
+  return Object.keys(users(env)).filter((uid) => uid !== me.id).map((uid) =>
+    env.DB.prepare("INSERT INTO notifications (id, user_id, type, rental_ids, text, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(randomId(8), uid, "new_rentals", ids.slice(0, 200).join(","), text, me.id, now));
+}
+
+async function notificationList(env, me) {
+  const [rows, cnt] = await env.DB.batch([
+    env.DB.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50").bind(me.id),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").bind(me.id),
+  ]);
+  return {
+    unread: cnt.results[0] ? cnt.results[0].n : 0,
+    items: rows.results.map((n) => ({
+      id: n.id, type: n.type, rentalIds: n.rental_ids ? n.rental_ids.split(",") : [],
+      text: n.text, by: n.created_by, at: n.created_at, read: !!n.read_at,
+    })),
+  };
+}
+
+async function notifications(req, env, me, parts) {
+  // GET /api/notifications
+  if (parts.length === 0 && req.method === "GET") return json(await notificationList(env, me));
+  // POST /api/notifications/read  { ids?: [...] }  — bez ids označí vše
+  if (parts.length === 1 && parts[0] === "read" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const now = Date.now();
+    const ids = Array.isArray(body.ids) ? body.ids.slice(0, 100).map(String) : null;
+    const mark = ids && ids.length
+      ? env.DB.prepare(`UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL AND id IN (${ids.map(() => "?").join(",")})`).bind(now, me.id, ...ids)
+      : env.DB.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL").bind(now, me.id);
+    await env.DB.batch([
+      mark,
+      env.DB.prepare("DELETE FROM notifications WHERE user_id = ? AND created_at < ?").bind(me.id, now - NOTICE_KEEP_MS),
+    ]);
+    return json(await notificationList(env, me));
+  }
+  return fail(404, "Neznámá adresa.");
+}
+
 /* ---------- team (oprávnění uživatelů) ---------- */
 async function teamList(env) {
   const rows = (await env.DB.prepare("SELECT user_id, can_upload, updated_by, updated_at FROM permissions").all()).results;
@@ -433,6 +486,7 @@ export async function onRequest({ request: req, env, params }) {
     if (!me) return fail(401, "Nejste přihlášen(a).");
     if (route === "me" && method === "GET") return json(meInfo(me));
     if (parts[0] === "team") return await team(req, env, me, parts.slice(1));
+    if (parts[0] === "notifications") return await notifications(req, env, me, parts.slice(1));
     if (parts[0] === "rentals") return await rentals(req, env, me, parts.slice(1));
     if (parts[0] === "files" && parts.length === 2 && method === "GET") return await downloadFile(req, env, parts[1]);
     return fail(404, "Neznámá adresa.");
