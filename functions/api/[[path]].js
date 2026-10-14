@@ -237,10 +237,10 @@ async function rentals(req, env, me, parts) {
     return json(await listRentals(env));
   }
 
-  // PATCH /api/rentals/:id  { note?, selfUpload? }
+  // PATCH /api/rentals/:id  { note?, selfUpload? } — poznámku mění jen admin, „klient nahrává sám“ každý přihlášený
   if (parts.length === 1 && method === "PATCH") {
-    const denied = adminOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
+    if ("note" in body) { const denied = adminOnly(); if (denied) return denied; }
     const stmts = [];
     if ("note" in body) {
       stmts.push(env.DB.prepare("UPDATE rentals SET note = ?, updated_at = ? WHERE id = ?").bind(clean(body.note, 4000), now, id));

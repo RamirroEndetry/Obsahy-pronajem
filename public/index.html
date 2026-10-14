@@ -1158,7 +1158,8 @@ function renderTeam() {
     h("ul", { class: "perm-list" },
       h("li", null, "přidávat odkazy na obsah a nahrávat .txt soubory k pronájmům"),
       h("li", null, "mazat jen odkazy a soubory, které sám nahrál"),
-      h("li", null, "import z NEXu, mazání pronájmů, poznámky a „Klient nahrává sám“ zůstávají jen adminovi")));
+      h("li", null, "přepínač „Klient si nahrává obsah sám“ a poznámky týmu mají všichni uživatelé"),
+      h("li", null, "import z NEXu, mazání pronájmů a poznámka pro techniky zůstávají jen adminovi")));
   if (!team || !team.length) return [head, h("div", { class: "muted-empty" }, "Načítám tým…")];
   const cards = team.map((u) => {
     const av = h("span", { class: "av sm", style: `--c:${u.color}` }, initials(u.name));
@@ -1313,7 +1314,7 @@ function renderDrawer() {
       r.address ? h("span", { class: "fact" }, icon("pin", 15), r.address) : null));
 
   let selfSec = null;
-  if (admin) {
+  if (!readOnly && me) {
     const on = !!r.selfUpload;
     selfSec = h("button", { class: "selfbox" + (on ? " on" : ""), type: "button", role: "switch", "aria-checked": String(on),
       onclick: () => mutate("PATCH", `rentals/${encodeURIComponent(r.id)}`, { selfUpload: !on }, on ? "Obsah zase dodáváme my." : "Označeno: klient si nahrává obsah sám.") },
