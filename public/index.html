@@ -119,7 +119,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .login-card { width: min(100%, 420px); display: flex; flex-direction: column; gap: 22px; }
 .login-card h2 { margin: 0; font: 800 32px/1.05 var(--f-display); letter-spacing: -.02em; }
 .login-card .sub { margin: -12px 0 0; color: var(--muted); }
-.who { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.who { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
 .who-btn { border: 1.5px solid var(--line); background: var(--surface); border-radius: 16px; padding: 18px 8px 14px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; font-weight: 700; transition: border-color .15s, transform .15s, box-shadow .15s; }
 .who-btn:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
 .who-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
