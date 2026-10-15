@@ -181,7 +181,7 @@ async function rentals(req, env, me, parts) {
     return json(await listRentals(env));
   }
 
-  // POST /api/rentals/import  { rows: [...] }
+  // POST /api/rentals/import  { rows: [...] } — přidá jen nové pronájmy, existující (duplicity) nemění
   if (parts.length === 1 && parts[0] === "import" && method === "POST") {
     const denied = adminOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
@@ -189,16 +189,21 @@ async function rentals(req, env, me, parts) {
     const valid = rows.filter((r) => ID_RE.test(String(r.nexId || "")));
     if (!valid.length) return fail(400, "Nenašel jsem žádné platné pronájmy.");
     const existing = new Set((await env.DB.prepare("SELECT id FROM rentals").all()).results.map((r) => r.id));
-    const stmts = valid.map((r) => env.DB.prepare(
-      "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at) " +
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET reported = excluded.reported, " +
-      "customer = excluded.customer, contact = excluded.contact, event = excluded.event, " +
-      "event_date = excluded.event_date, address = excluded.address, updated_at = excluded.updated_at",
-    ).bind(String(r.nexId), ...rentalFields(r), me.id, now, now));
-    const fresh = valid.filter((r) => !existing.has(String(r.nexId)));
-    await env.DB.batch([...stmts, ...newRentalNotices(env, me, fresh), bump(env)]);
-    const created = fresh.length;
-    return json({ created, updated: valid.length - created, ...(await listRentals(env)) });
+    const seen = new Set();
+    const fresh = valid.filter((r) => {
+      const id = String(r.nexId);
+      if (existing.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (fresh.length) {
+      const stmts = fresh.map((r) => env.DB.prepare(
+        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+      ).bind(String(r.nexId), ...rentalFields(r), me.id, now, now));
+      await env.DB.batch([...stmts, ...newRentalNotices(env, me, fresh), bump(env)]);
+    }
+    return json({ created: fresh.length, skipped: valid.length - fresh.length, ...(await listRentals(env)) });
   }
 
   // POST /api/rentals  (ruční přidání)

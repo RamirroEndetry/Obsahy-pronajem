@@ -309,6 +309,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .preview th { font: 600 11px/1.2 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .tag { font: 600 11px/1 var(--f-mono); padding: 4px 7px; border-radius: 6px; background: var(--surface-3); color: var(--muted); white-space: nowrap; }
 .tag.new { background: var(--accent-soft); color: var(--accent); }
+.imp-dup td { opacity: .5; }
+.imp-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
 .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 label.fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; min-width: 0; }
@@ -514,7 +516,7 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 
     <section class="panel" id="importPanel" hidden>
       <h2>Vložit pronájmy z NEXu</h2>
-      <p>V NEXu na stránce Pronájmy označte řádky tabulky (klidně celou tabulku), zkopírujte je (Ctrl+C) a vložte sem (Ctrl+V). Existující pronájmy se jen aktualizují, odkazy u nich zůstanou.</p>
+      <p>V NEXu na stránce Pronájmy označte řádky tabulky (klidně celou tabulku), zkopírujte je (Ctrl+C) a vložte sem (Ctrl+V). Přidají se jen nové pronájmy. Ty, které už v aplikaci jsou, se ukážou jako duplicity a zůstanou beze změny.</p>
       <textarea class="paste" id="paste" placeholder="Sem vložte zkopírovanou tabulku pronájmů"></textarea>
       <div class="preview" id="preview"></div>
       <div class="row-actions">
@@ -1008,37 +1010,56 @@ function parseText(text) {
     };
   });
 }
+// Rozdělí vložené řádky na nové a duplicity (už v aplikaci, nebo vícekrát ve vloženém textu).
+function classifyImport(list) {
+  const seen = new Set();
+  return list.map((r) => {
+    let kind = "new";
+    if (docs.has(r.nexId)) kind = "dup";
+    else if (seen.has(r.nexId)) kind = "dupText";
+    seen.add(r.nexId);
+    return { ...r, kind };
+  });
+}
 function showPreview(list) {
-  pending = list;
+  pending = classifyImport(list);
   const box = $("#preview");
+  const btn = $("#btnImportSave");
   box.replaceChildren();
-  $("#btnImportSave").disabled = !list.length || !isAdmin();
-  if (!list.length) { box.append(h("p", null, "V textu jsem nenašel žádné pronájmy. Zkopírujte řádky tabulky včetně sloupců ID a Datum nahlášení.")); return; }
+  const fresh = pending.filter((r) => r.kind === "new");
+  const dups = pending.length - fresh.length;
+  btn.disabled = !fresh.length || !isAdmin();
+  btn.textContent = fresh.length ? `Přidat ${fresh.length} ${plural(fresh.length, "nový pronájem", "nové pronájmy", "nových pronájmů")}` : "Nic nového k přidání";
+  if (!list.length) {
+    btn.textContent = "Uložit pronájmy";
+    box.append(h("p", null, "V textu jsem nenašel žádné pronájmy. Zkopírujte řádky tabulky včetně sloupců ID a Datum nahlášení."));
+    return;
+  }
+  box.append(h("p", { class: "imp-sum" },
+    h("span", { class: "tag new" }, `Nové: ${fresh.length}`), " ",
+    h("span", { class: "tag" }, `Duplicity: ${dups}`),
+    dups ? " Duplicity se nepřidají ani nezmění." : ""));
+  const order = { new: 0, dupText: 1, dup: 2 };
   const tb = h("tbody");
-  for (const r of list) {
-    const ex = docs.get(r.nexId);
-    const changed = ex && NEX_FIELDS.some((f) => (ex[f] ?? "") !== (r[f] ?? ""));
-    tb.append(h("tr", null,
-      h("td", null, h("span", { class: "tag" + (ex ? "" : " new") }, ex ? (changed ? "aktualizace" : "beze změny") : "nový")),
+  for (const r of pending.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
+    const label = r.kind === "new" ? "nový" : r.kind === "dup" ? "duplicita, přeskočí se" : "2× v textu, přeskočí se";
+    tb.append(h("tr", { class: r.kind === "new" ? "" : "imp-dup" },
+      h("td", null, h("span", { class: "tag" + (r.kind === "new" ? " new" : "") }, label)),
       h("td", { class: "mono" }, r.nexId), h("td", null, r.customer), h("td", null, r.event), h("td", null, fmtDate(r.eventDate))));
   }
   box.append(h("table", null, h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "ID"), h("th", null, "Zákazník"), h("th", null, "Akce"), h("th", null, "Datum akce"))), tb));
 }
 async function saveImport() {
   if (!isAdmin()) return;
-  const rows = pending.filter((r) => {
-    const ex = docs.get(r.nexId);
-    return !ex || NEX_FIELDS.some((f) => (ex[f] ?? "") !== (r[f] ?? ""));
-  });
-  if (!rows.length) { toast("Vše už bylo aktuální."); return; }
+  const rows = classifyImport(pending).filter((r) => r.kind === "new").map(({ kind, ...r }) => r);
+  if (!rows.length) { toast("Žádné nové pronájmy, všechno jsou duplicity."); return; }
   $("#btnImportSave").disabled = true;
   const res = await mutate("POST", "rentals/import", { rows });
   if (!res) { $("#btnImportSave").disabled = false; return; }
-  const parts = [];
-  if (res.created) parts.push(`${res.created} ${plural(res.created, "nový", "nové", "nových")}`);
-  if (res.updated) parts.push(`${res.updated} ${plural(res.updated, "aktualizovaný", "aktualizované", "aktualizovaných")}`);
-  toast(`Uloženo: ${parts.join(", ")}.`);
+  const skipped = pending.length - res.created;
+  toast(`Přidáno ${res.created} ${plural(res.created, "nový pronájem", "nové pronájmy", "nových pronájmů")}` + (skipped ? `, ${skipped} ${plural(skipped, "duplicita přeskočena", "duplicity přeskočeny", "duplicit přeskočeno")}.` : "."));
   $("#paste").value = ""; $("#preview").replaceChildren(); $("#importPanel").hidden = true;
+  $("#btnImportSave").textContent = "Uložit pronájmy";
 }
 
 /* ---------- sidebar ---------- */
