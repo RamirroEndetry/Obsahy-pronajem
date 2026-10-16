@@ -146,9 +146,36 @@ async function listRentals(env) {
       teamNotes: notesByRental.get(r.id) || [],
       confirmed: r.confirmed_at ? { by: r.confirmed_by, at: r.confirmed_at } : null,
       selfUpload: r.self_upload ? { by: r.self_by, at: r.self_at } : null,
+      details: parseDetails(r.details),
       createdBy: r.created_by, createdAt: r.created_at,
     })),
   };
+}
+
+// Detaily z rozbaleného řádku NEXu. Finanční údaje a IČO technici nepotřebují, neukládáme je.
+const DETAIL_SKIP = new Set(["Celková cena za pronájem bez DPH", "Vratná kauce v Kč", "IČO", "Adresa místa akce"]);
+function parseDetails(raw) {
+  try { const d = JSON.parse(raw || "{}"); return d && typeof d === "object" && !Array.isArray(d) ? d : {}; } catch { return {}; }
+}
+function cleanDetails(d) {
+  const out = {};
+  if (!d || typeof d !== "object" || Array.isArray(d)) return out;
+  let n = 0;
+  for (const [k, v] of Object.entries(d)) {
+    const key = clean(k, 60).replace(/:$/, "");
+    if (!key || DETAIL_SKIP.has(key)) continue;
+    out[key] = clean(v, 1000);
+    if (++n >= 40) break;
+  }
+  return out;
+}
+// Sloučí nové detaily do starých: prázdná hodnota klíč odebere.
+function mergeDetails(oldRaw, incoming) {
+  const merged = parseDetails(oldRaw);
+  for (const [k, v] of Object.entries(cleanDetails(incoming))) {
+    if (v) merged[k] = v; else delete merged[k];
+  }
+  return JSON.stringify(merged);
 }
 
 function rentalFields(row) {
@@ -181,29 +208,40 @@ async function rentals(req, env, me, parts) {
     return json(await listRentals(env));
   }
 
-  // POST /api/rentals/import  { rows: [...] } — přidá jen nové pronájmy, existující (duplicity) nemění
+  // POST /api/rentals/import  { rows: [...] } — přidá jen nové pronájmy; u existujících jen doplní detaily (panely…)
   if (parts.length === 1 && parts[0] === "import" && method === "POST") {
     const denied = adminOnly(); if (denied) return denied;
     const body = await req.json().catch(() => ({}));
     const rows = Array.isArray(body.rows) ? body.rows.slice(0, 500) : [];
     const valid = rows.filter((r) => ID_RE.test(String(r.nexId || "")));
     if (!valid.length) return fail(400, "Nenašel jsem žádné platné pronájmy.");
-    const existing = new Set((await env.DB.prepare("SELECT id FROM rentals").all()).results.map((r) => r.id));
+    const existing = new Map((await env.DB.prepare("SELECT id, details FROM rentals").all()).results.map((r) => [r.id, r.details]));
     const seen = new Set();
-    const fresh = valid.filter((r) => {
+    const fresh = [];
+    const detailUpdates = [];
+    for (const r of valid) {
       const id = String(r.nexId);
-      if (existing.has(id) || seen.has(id)) return false;
+      if (seen.has(id)) continue;
       seen.add(id);
-      return true;
-    });
-    if (fresh.length) {
-      const stmts = fresh.map((r) => env.DB.prepare(
-        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-      ).bind(String(r.nexId), ...rentalFields(r), me.id, now, now));
-      await env.DB.batch([...stmts, ...newRentalNotices(env, me, fresh), bump(env)]);
+      if (!existing.has(id)) { fresh.push(r); continue; }
+      const incoming = cleanDetails(r.details);
+      if (!Object.keys(incoming).length) continue;
+      const merged = mergeDetails(existing.get(id), incoming);
+      if (merged !== JSON.stringify(parseDetails(existing.get(id)))) detailUpdates.push([id, merged]);
     }
-    return json({ created: fresh.length, skipped: valid.length - fresh.length, ...(await listRentals(env)) });
+    const stmts = [
+      ...fresh.map((r) => env.DB.prepare(
+        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, details, created_by, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+      ).bind(String(r.nexId), ...rentalFields(r), JSON.stringify(cleanDetails(r.details)), me.id, now, now)),
+      ...detailUpdates.map(([id, merged]) =>
+        env.DB.prepare("UPDATE rentals SET details = ?, updated_at = ? WHERE id = ?").bind(merged, now, id)),
+    ];
+    if (stmts.length) await env.DB.batch([...stmts, ...newRentalNotices(env, me, fresh), bump(env)]);
+    return json({
+      created: fresh.length, detailsUpdated: detailUpdates.length,
+      skipped: valid.length - fresh.length - detailUpdates.length, ...(await listRentals(env)),
+    });
   }
 
   // POST /api/rentals  (ruční přidání)
@@ -216,9 +254,9 @@ async function rentals(req, env, me, parts) {
     const self = r.selfUpload ? 1 : 0;
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, created_by, created_at, updated_at, " +
-        "self_upload, self_by, self_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).bind(id, ...rentalFields(r), me.id, now, now, self, self ? me.id : null, self ? now : null),
+        "INSERT INTO rentals (id, reported, customer, contact, event, event_date, address, details, created_by, created_at, updated_at, " +
+        "self_upload, self_by, self_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(id, ...rentalFields(r), JSON.stringify(cleanDetails(r.details)), me.id, now, now, self, self ? me.id : null, self ? now : null),
       ...newRentalNotices(env, me, [{ ...r, nexId: id }]),
       bump(env),
     ]);
@@ -247,8 +285,12 @@ async function rentals(req, env, me, parts) {
   // PATCH /api/rentals/:id  { note?, selfUpload? } — poznámku mění jen admin, „klient nahrává sám“ každý přihlášený
   if (parts.length === 1 && method === "PATCH") {
     const body = await req.json().catch(() => ({}));
-    if ("note" in body) { const denied = adminOnly(); if (denied) return denied; }
+    if ("note" in body || "details" in body) { const denied = adminOnly(); if (denied) return denied; }
     const stmts = [];
+    if ("details" in body) {
+      const cur = await env.DB.prepare("SELECT details FROM rentals WHERE id = ?").bind(id).first();
+      stmts.push(env.DB.prepare("UPDATE rentals SET details = ?, updated_at = ? WHERE id = ?").bind(mergeDetails(cur && cur.details, body.details), now, id));
+    }
     if ("note" in body) {
       stmts.push(env.DB.prepare("UPDATE rentals SET note = ?, updated_at = ? WHERE id = ?").bind(clean(body.note, 4000), now, id));
     }

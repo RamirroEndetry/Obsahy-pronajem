@@ -422,6 +422,17 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 .np-hint { font-size: 12px; color: var(--muted); }
 .newtag { font: 700 10px/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); }
 @media (max-width: 900px) { .npanel { left: 16px; right: 16px; width: auto; top: calc(70px + env(safe-area-inset-top, 0px)); bottom: auto; } }
+.pnl { display: flex; gap: 6px; align-items: center; font-size: 12.5px; font-weight: 600; color: var(--ink); opacity: .85; min-width: 0; }
+.pnl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnl .ico { color: var(--accent); flex: none; }
+.panelchips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.panelchip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.panelchip .ico { color: var(--accent); flex: none; }
+.techmsg { white-space: pre-line; padding: 12px 14px; border-radius: 12px; background: var(--amber-soft); font-size: 14px; margin-top: 12px; }
+.techmsg b { display: block; font-size: 12px; color: var(--amber); margin-bottom: 2px; }
+.techedit { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 8px; margin-bottom: 10px; }
+.evp { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-hint { font-size: 13px; color: var(--amber); background: var(--amber-soft); padding: 8px 12px; border-radius: 10px; margin: 0 0 10px; }
 .danger-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); padding-top: 14px; border-top: 1px solid var(--line); }
 
 .empty { text-align: center; padding: 60px 16px; color: var(--muted); background: var(--surface); border: 1.5px dashed var(--line); border-radius: 22px; }
@@ -534,6 +545,8 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
         <label class="fld">Datum akce *<input class="in" id="fDate" type="date" required></label>
         <label class="fld">Kontaktní osoba<input class="in" id="fContact" placeholder="jméno, telefon, e-mail"></label>
         <label class="fld">Adresa místa akce<input class="in" id="fAddress"></label>
+        <label class="fld">Typ panelů<input class="in" id="fPanels" placeholder="např. 1x Extra Touch 03/25 Leo 55&quot; Digiday"></label>
+        <label class="fld">Počet panelů<input class="in" id="fPanelCount" inputmode="numeric"></label>
         <label class="chk"><input type="checkbox" id="fSelf"> Klient si nahrává obsah sám</label>
         <div class="row-actions" style="grid-column: 1 / -1">
           <button class="btn primary" type="submit">Přidat pronájem</button>
@@ -592,6 +605,8 @@ const ICONS = {
   box: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   chev: '<path d="m9 6 6 6-6 6"/>',
+  screen: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.6 0 4.5 1.8 4.5 4.5"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
@@ -975,19 +990,56 @@ function cellLines(el) {
   while (w.nextNode()) { const t = w.currentNode.nodeValue.replace(/\s+/g, " ").trim(); if (t && t !== "▶") out.push(t); }
   return out;
 }
+/* Detaily z rozbaleného řádku NEXu ("Typ panelů: …"). Cenu, kauci a IČO technici nepotřebují. */
+const DETAIL_SKIP = new Set(["Celková cena za pronájem bez DPH", "Vratná kauce v Kč", "IČO", "Adresa místa akce"]);
+const DETAIL_ORDER = ["Celkový počet panelů", "Datum odvozu ze skladu", "Datum a čas svozu", "Doprava panelu", "Internet v místě akce",
+  "Typ přehrávání obsahu", "Obsah na panelech", "Prodlužky", "Příslušenství", "Kontaktní osoba v místě akce", "Foto / video", "Poznámka", "Nájem zadal"];
+// Název údaje v NEXu začíná velkým písmenem a nemá číslice ("Typ panelů:"), takže čas "8:00" v textu nesplete.
+const LABEL_RE = /^([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][^:\d]{1,58}):\s*(.*)$/;
+function parseDetailLines(lines) {
+  const d = {};
+  let key = null;
+  for (const raw of lines) {
+    const t = String(raw).trim();
+    if (!t) continue;
+    const m = t.match(LABEL_RE);
+    if (m && !/^https?$/i.test(m[1].trim())) { key = m[1].trim(); d[key] = m[2].trim(); }
+    else if (key) d[key] = d[key] ? d[key] + "\n" + t : t;
+  }
+  for (const k of Object.keys(d)) if (!d[k] || DETAIL_SKIP.has(k)) delete d[k];
+  return d;
+}
+function panelList(r) {
+  const v = (r.details || {})["Typ panelů"] || "";
+  return v.split(/\n|[,;](?=\s*\d+\s*[x×])/).map((x) => x.trim()).filter(Boolean);
+}
+function panelSummary(r) {
+  const l = panelList(r);
+  return l.length ? l.join(", ") : "";
+}
+function detailsDiffer(stored, inc) {
+  return Object.entries(inc || {}).some(([k, v]) => v && (stored || {})[k] !== v);
+}
 function parseHTML(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const out = [];
+  let last = null;
   doc.querySelectorAll("tr").forEach((tr) => {
     const cells = [...tr.children].filter((c) => c.tagName === "TD" || c.tagName === "TH").map(cellLines);
     const i = cells.findIndex((l) => l.length === 1 && /^\d{1,7}$/.test(l[0]));
-    if (i < 0) return;
-    const c = cells.slice(i);
-    if (c.length < 7 || !parseCz(c[1].join(" "))) return;
-    out.push({
-      nexId: c[0][0], reported: parseCz(c[1].join(" ")), customer: c[2].join(" "),
-      contact: c[3].join("\n"), event: c[4].join(" "), eventDate: parseCz(c[5].join(" ")), address: c[6].join(" "),
-    });
+    const c = i >= 0 ? cells.slice(i) : null;
+    if (c && c.length >= 7 && parseCz(c[1].join(" "))) {
+      last = {
+        nexId: c[0][0], reported: parseCz(c[1].join(" ")), customer: c[2].join(" "),
+        contact: c[3].join("\n"), event: c[4].join(" "), eventDate: parseCz(c[5].join(" ")), address: c[6].join(" "),
+        details: {},
+      };
+      out.push(last);
+      return;
+    }
+    // Rozbalený detail = řádek s 1–3 buňkami hned pod pronájmem. Jiný nečitelný řádek detail neposkytne.
+    if (cells.length > 3) { last = null; return; }
+    if (last) Object.assign(last.details, parseDetailLines(cells.flat()));
   });
   return out;
 }
@@ -1003,10 +1055,15 @@ function parseText(text) {
     const before = di >= 0 ? rest.slice(0, di) : rest;
     const mail = before.findIndex((x) => x.includes("@"));
     const cEnd = mail >= 0 ? mail + 1 : Math.min(1, before.length);
+    // za adresou může následovat rozbalený detail ("Typ panelů: …")
+    const after = di >= 0 ? rest.slice(di + 1) : [];
+    let li = after.findIndex((x) => { const m = x.match(LABEL_RE); return m && !/^https?$/i.test(m[1].trim()); });
+    if (li < 0) li = after.length;
     return {
       nexId: t[0], reported: parseCz(t[1]), customer: t[2] || "",
       contact: before.slice(0, cEnd).join("\n"), event: before.slice(cEnd).join(" "),
-      eventDate: di >= 0 ? parseCz(rest[di]) : null, address: di >= 0 ? rest.slice(di + 1).join(" ") : "",
+      eventDate: di >= 0 ? parseCz(rest[di]) : null, address: after.slice(0, li).join(" "),
+      details: parseDetailLines(after.slice(li)),
     };
   });
 }
@@ -1015,8 +1072,8 @@ function classifyImport(list) {
   const seen = new Set();
   return list.map((r) => {
     let kind = "new";
-    if (docs.has(r.nexId)) kind = "dup";
-    else if (seen.has(r.nexId)) kind = "dupText";
+    if (seen.has(r.nexId)) kind = "dupText";
+    else if (docs.has(r.nexId)) kind = detailsDiffer(docs.get(r.nexId).details, r.details) ? "details" : "dup";
     seen.add(r.nexId);
     return { ...r, kind };
   });
@@ -1027,9 +1084,13 @@ function showPreview(list) {
   const btn = $("#btnImportSave");
   box.replaceChildren();
   const fresh = pending.filter((r) => r.kind === "new");
-  const dups = pending.length - fresh.length;
-  btn.disabled = !fresh.length || !isAdmin();
-  btn.textContent = fresh.length ? `Přidat ${fresh.length} ${plural(fresh.length, "nový pronájem", "nové pronájmy", "nových pronájmů")}` : "Nic nového k přidání";
+  const fill = pending.filter((r) => r.kind === "details");
+  const dups = pending.length - fresh.length - fill.length;
+  btn.disabled = !(fresh.length + fill.length) || !isAdmin();
+  const actions = [];
+  if (fresh.length) actions.push(`přidat ${fresh.length} ${plural(fresh.length, "nový", "nové", "nových")}`);
+  if (fill.length) actions.push(`doplnit detaily u ${fill.length}`);
+  btn.textContent = actions.length ? actions.join(" a ").replace(/^./, (c) => c.toUpperCase()) : "Nic nového k přidání";
   if (!list.length) {
     btn.textContent = "Uložit pronájmy";
     box.append(h("p", null, "V textu jsem nenašel žádné pronájmy. Zkopírujte řádky tabulky včetně sloupců ID a Datum nahlášení."));
@@ -1037,27 +1098,37 @@ function showPreview(list) {
   }
   box.append(h("p", { class: "imp-sum" },
     h("span", { class: "tag new" }, `Nové: ${fresh.length}`), " ",
+    fill.length ? h("span", { class: "tag new" }, `Doplnění detailů: ${fill.length}`) : null, " ",
     h("span", { class: "tag" }, `Duplicity: ${dups}`),
-    dups ? " Duplicity se nepřidají ani nezmění." : ""));
-  const order = { new: 0, dupText: 1, dup: 2 };
+    dups || fill.length ? " U existujících pronájmů se mění jen detaily (panely apod.), nic jiného." : ""));
+  if (!pending.some((r) => Object.keys(r.details || {}).length)) {
+    box.append(h("p", { class: "imp-hint" }, "Tip: v NEXu rozbalte řádky šipkou ▶ a zkopírujte je i s detailem. Aplikace pak načte i panely a vzkaz pro technika."));
+  }
+  const order = { new: 0, details: 1, dupText: 2, dup: 3 };
   const tb = h("tbody");
   for (const r of pending.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
-    const label = r.kind === "new" ? "nový" : r.kind === "dup" ? "duplicita, přeskočí se" : "2× v textu, přeskočí se";
-    tb.append(h("tr", { class: r.kind === "new" ? "" : "imp-dup" },
-      h("td", null, h("span", { class: "tag" + (r.kind === "new" ? " new" : "") }, label)),
-      h("td", { class: "mono" }, r.nexId), h("td", null, r.customer), h("td", null, r.event), h("td", null, fmtDate(r.eventDate))));
+    const label = { new: "nový", details: "doplní se detaily", dup: "duplicita, přeskočí se", dupText: "2× v textu, přeskočí se" }[r.kind];
+    const active = r.kind === "new" || r.kind === "details";
+    tb.append(h("tr", { class: active ? "" : "imp-dup" },
+      h("td", null, h("span", { class: "tag" + (active ? " new" : "") }, label)),
+      h("td", { class: "mono" }, r.nexId), h("td", null, r.customer), h("td", null, r.event), h("td", null, fmtDate(r.eventDate)),
+      h("td", null, panelSummary(r) || "—")));
   }
-  box.append(h("table", null, h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "ID"), h("th", null, "Zákazník"), h("th", null, "Akce"), h("th", null, "Datum akce"))), tb));
+  box.append(h("table", null, h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "ID"), h("th", null, "Zákazník"), h("th", null, "Akce"), h("th", null, "Datum akce"), h("th", null, "Panely"))), tb));
 }
 async function saveImport() {
   if (!isAdmin()) return;
-  const rows = classifyImport(pending).filter((r) => r.kind === "new").map(({ kind, ...r }) => r);
-  if (!rows.length) { toast("Žádné nové pronájmy, všechno jsou duplicity."); return; }
+  const rows = classifyImport(pending).filter((r) => r.kind === "new" || r.kind === "details").map(({ kind, ...r }) => r);
+  if (!rows.length) { toast("Žádné nové pronájmy ani detaily, všechno jsou duplicity."); return; }
   $("#btnImportSave").disabled = true;
   const res = await mutate("POST", "rentals/import", { rows });
   if (!res) { $("#btnImportSave").disabled = false; return; }
-  const skipped = pending.length - res.created;
-  toast(`Přidáno ${res.created} ${plural(res.created, "nový pronájem", "nové pronájmy", "nových pronájmů")}` + (skipped ? `, ${skipped} ${plural(skipped, "duplicita přeskočena", "duplicity přeskočeny", "duplicit přeskočeno")}.` : "."));
+  const parts = [];
+  if (res.created) parts.push(`přidáno ${res.created} ${plural(res.created, "nový pronájem", "nové pronájmy", "nových pronájmů")}`);
+  if (res.detailsUpdated) parts.push(`doplněny detaily u ${res.detailsUpdated}`);
+  const skipped = pending.length - res.created - (res.detailsUpdated || 0);
+  if (skipped > 0) parts.push(`${skipped} ${plural(skipped, "duplicita přeskočena", "duplicity přeskočeny", "duplicit přeskočeno")}`);
+  toast((parts.join(", ") || "Nic se nezměnilo").replace(/^./, (c) => c.toUpperCase()) + ".");
   $("#paste").value = ""; $("#preview").replaceChildren(); $("#importPanel").hidden = true;
   $("#btnImportSave").textContent = "Uložit pronájmy";
 }
@@ -1201,7 +1272,7 @@ function renderList(all) {
   const sdef = SFILTERS.find((s) => s.id === statFilter);
   const q = query.toLowerCase();
   const shown = inPeriod.filter((r) => !sdef || sdef.test(r))
-    .filter((r) => !q || [r.nexId, r.customer, r.event, r.contact, r.address].join(" ").toLowerCase().includes(q))
+    .filter((r) => !q || [r.nexId, r.customer, r.event, r.contact, r.address, ...Object.values(r.details || {})].join(" ").toLowerCase().includes(q))
     .sort((a, b) => (period === "past" ? -1 : 1) * String(a.eventDate || "9").localeCompare(String(b.eventDate || "9")) || Number(a.nexId) - Number(b.nexId));
 
   const searchBox = h("label", { class: "search" }, icon("search", 17), h("input", { id: "search", type: "search", placeholder: "Hledat ID, zákazníka, akci…", "aria-label": "Hledat", value: query }));
@@ -1232,7 +1303,7 @@ function renderListBody() {
   const sdef = SFILTERS.find((s) => s.id === statFilter);
   const q = query.toLowerCase();
   const shown = all.filter(pdef.test).filter((r) => !sdef || sdef.test(r))
-    .filter((r) => !q || [r.nexId, r.customer, r.event, r.contact, r.address].join(" ").toLowerCase().includes(q))
+    .filter((r) => !q || [r.nexId, r.customer, r.event, r.contact, r.address, ...Object.values(r.details || {})].join(" ").toLowerCase().includes(q))
     .sort((a, b) => (period === "past" ? -1 : 1) * String(a.eventDate || "9").localeCompare(String(b.eventDate || "9")) || Number(a.nexId) - Number(b.nexId));
   fillTickets(el, shown);
 }
@@ -1253,7 +1324,8 @@ function fillTickets(el, shown) {
       h("div", { class: "ttl" },
         h("span", { class: "id" }, `#${r.nexId}`, newIds.has(r.id) ? h("span", { class: "newtag" }, "Nový") : null, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
         h("strong", null, r.event || "Bez názvu akce"),
-        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : "") + noteCount(r))),
+        h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : "") + noteCount(r)),
+        panelSummary(r) ? h("span", { class: "pnl" }, icon("screen", 14), h("span", null, panelSummary(r))) : null),
       h("div", { class: "provs" }, provs.map((p) => h("span", { class: "pv", style: `--pc:${p.color}`, title: p.name }, p.ab))),
       track(r),
       h("span", { class: "chev" }, icon("chev", 20))));
@@ -1272,7 +1344,8 @@ function renderCalendar(all) {
       h("div", { class: "day-h" }, h("b", null, d.getDate()), h("span", null, isToday ? "dnes" : `${WEEKDAYS[wd]} · ${MONTHS[d.getMonth()]}`)),
       evs.length
         ? evs.map((r) => { const s = statusOf(r); return h("button", { class: "ev", type: "button", style: `--k:${ST[s].k};--ks:${ST[s].ks}`, onclick: () => openDrawer(r.id) },
-            h("b", null, `#${r.nexId} · ${ST[s].label}`), h("strong", null, r.event || "Bez názvu akce"), h("span", null, r.customer)); })
+            h("b", null, `#${r.nexId} · ${ST[s].label}`), h("strong", null, r.event || "Bez názvu akce"), h("span", null, r.customer),
+            panelSummary(r) ? h("span", { class: "evp" }, panelSummary(r)) : null); })
         : h("span", { class: "nothing" }, "volno"));
   };
   const weeks = [0, 1].map((w) => {
@@ -1349,11 +1422,13 @@ function buildDrawer() {
   const teamInput = h("textarea", { class: "in tnote-in", id: "drTeamNote", rows: "2", maxlength: "1000",
     placeholder: "Napište poznámku pro tým, např. klientka slíbila obsah do pátku…", "aria-label": "Nová poznámka týmu" });
   teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addTeamNote(); } });
-  dr = { url, label, form, note, teamInput, fileInput, upload: null, uploading: false, delArm: false, justConfirmed: false };
+  const pIn = h("textarea", { class: "in", id: "drPanels", rows: "2", placeholder: "např. 1x Extra Touch 03/25 Leo 55\" Digiday", "aria-label": "Typ panelů" });
+  const pCount = h("input", { class: "in", id: "drPanelCount", inputmode: "numeric", placeholder: "Počet", "aria-label": "Celkový počet panelů" });
+  dr = { url, label, form, note, teamInput, fileInput, pIn, pCount, editPanels: false, upload: null, uploading: false, delArm: false, justConfirmed: false };
 }
 function openDrawer(id) {
   if (!dr) buildDrawer();
-  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.teamInput.value = ""; dr.delArm = false; dr.upload = null; }
+  if (openId !== id) { dr.url.value = ""; dr.label.value = ""; dr.teamInput.value = ""; dr.delArm = false; dr.upload = null; dr.editPanels = false; }
   openId = id;
   const root = $("#drawerRoot");
   root.hidden = false;
@@ -1406,6 +1481,35 @@ async function addTeamNote() {
   dr.teamInput.value = "";
   const res = await mutate("POST", `rentals/${encodeURIComponent(id)}/notes`, { text });
   if (!res && !dr.teamInput.value) dr.teamInput.value = text;
+}
+
+function techSection(r, admin) {
+  const d = r.details || {};
+  const panels = panelList(r);
+  const keys = [...DETAIL_ORDER.filter((k) => d[k] && k !== "Vzkaz pro technika"),
+    ...Object.keys(d).filter((k) => d[k] && k !== "Typ panelů" && k !== "Vzkaz pro technika" && !DETAIL_ORDER.includes(k))];
+  if (!panels.length && !keys.length && !d["Vzkaz pro technika"] && !admin) return null;
+  const head = h("p", { class: "sec-t" }, h("span", null, "Panely a technika"),
+    admin && !dr.editPanels ? h("button", { class: "btn ghost", type: "button", style: "padding:2px 6px",
+      onclick: () => { dr.editPanels = true; dr.pIn.value = d["Typ panelů"] || ""; dr.pCount.value = d["Celkový počet panelů"] || ""; renderDrawer(); dr.pIn.focus(); } },
+      icon("edit", 14), "Upravit") : null);
+  if (admin && dr.editPanels) {
+    return h("section", null, head,
+      h("div", { class: "techedit" }, dr.pIn, dr.pCount),
+      h("div", { class: "row-actions" },
+        h("button", { class: "btn primary", type: "button", onclick: async () => {
+          const res = await mutate("PATCH", `rentals/${encodeURIComponent(r.id)}`, { details: { "Typ panelů": dr.pIn.value.trim(), "Celkový počet panelů": dr.pCount.value.trim() } }, "Panely uloženy.");
+          if (res) { dr.editPanels = false; renderDrawer(); }
+        } }, icon("check", 16, 2.4), "Uložit"),
+        h("button", { class: "btn ghost", type: "button", onclick: () => { dr.editPanels = false; renderDrawer(); } }, "Zrušit")));
+  }
+  const val = (v) => /^https?:\/\/\S+$/.test(v) ? h("a", { href: v, target: "_blank", rel: "noopener noreferrer", style: "color:var(--accent)" }, v.split("/").pop() || v) : v;
+  return h("section", null, head,
+    panels.length
+      ? h("div", { class: "panelchips" }, panels.map((p) => h("span", { class: "panelchip" }, icon("screen", 16), p)))
+      : h("div", { class: "empty-files", style: "padding:14px;margin-bottom:12px" }, admin ? "Panely zatím nejsou zadané. Doplníte je tlačítkem Upravit, nebo importem rozbalených řádků z NEXu." : "Panely zatím nejsou zadané."),
+    keys.length ? h("dl", { class: "info" }, keys.flatMap((k) => [h("dt", null, k), h("dd", null, val(d[k]))])) : null,
+    d["Vzkaz pro technika"] ? h("div", { class: "techmsg" }, h("b", null, "Vzkaz pro technika"), d["Vzkaz pro technika"]) : null);
 }
 
 function uploadUi() {
@@ -1562,7 +1666,7 @@ function renderDrawer() {
   const scroller = drawer.querySelector(".dr-body");
   const scrollTop = scroller ? scroller.scrollTop : 0;
   drawer.replaceChildren(top, h("div", { class: "dr-body" },
-    title, h("div", { class: "dr-track" }, track(r)), selfSec, confirm, teamSec, files, noteSec, info, danger));
+    title, h("div", { class: "dr-track" }, track(r)), techSection(r, admin), selfSec, confirm, teamSec, files, noteSec, info, danger));
   drawer.querySelector(".dr-body").scrollTop = scrollTop;
 }
 
@@ -1612,6 +1716,7 @@ $("#addForm").addEventListener("submit", async (e) => {
     nexId: id, customer: $("#fCustomer").value.trim(), contact: $("#fContact").value.trim(),
     event: $("#fEvent").value.trim(), eventDate: $("#fDate").value, address: $("#fAddress").value.trim(),
     selfUpload: $("#fSelf").checked,
+    details: { "Typ panelů": $("#fPanels").value.trim(), "Celkový počet panelů": $("#fPanelCount").value.trim() },
   });
   if (!res) return;
   e.target.reset(); $("#addPanel").hidden = true; toast(`Pronájem ${id} přidán.`);
