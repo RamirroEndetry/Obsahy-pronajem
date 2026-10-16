@@ -420,6 +420,10 @@ dl.info dd { margin: 0; overflow-wrap: anywhere; user-select: text; display: fle
 .np-more { font-size: 12px; color: var(--muted); align-self: center; }
 .np-foot { padding: 12px 16px; border-top: 1px solid var(--line); margin: 0; }
 .np-hint { font-size: 12px; color: var(--muted); }
+.warntag { font: 700 10px/1 var(--f-body); letter-spacing: .04em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; background: var(--amber-soft); color: var(--amber); }
+.missing-card { border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+.missing-card .card-h h3 .ico { color: var(--amber); }
+.missing-card p.hint { margin: 0; font-size: 13px; color: var(--muted); }
 .newtag { font: 700 10px/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); }
 @media (max-width: 900px) { .npanel { left: 16px; right: 16px; width: auto; top: calc(70px + env(safe-area-inset-top, 0px)); bottom: auto; } }
 .pnl { display: flex; gap: 6px; align-items: center; font-size: 12.5px; font-weight: 600; color: var(--ink); opacity: .85; min-width: 0; }
@@ -977,7 +981,7 @@ function errMsg(e) {
 }
 
 let toastT;
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+function toast(msg, ms = 3200) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms); }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast("Zkopírováno."); }
   catch { toast("Kopírování se nepovedlo, označte text ručně."); }
@@ -1017,6 +1021,8 @@ function panelSummary(r) {
   const l = panelList(r);
   return l.length ? l.join(", ") : "";
 }
+const NEX_LIST_URL = "https://nex.digiday.cz/pronajmy/list";
+function needsDetails(r) { return !isPast(r) && !panelList(r).length; }
 function detailsDiffer(stored, inc) {
   return Object.entries(inc || {}).some(([k, v]) => v && (stored || {})[k] !== v);
 }
@@ -1112,7 +1118,7 @@ function showPreview(list) {
     tb.append(h("tr", { class: active ? "" : "imp-dup" },
       h("td", null, h("span", { class: "tag" + (active ? " new" : "") }, label)),
       h("td", { class: "mono" }, r.nexId), h("td", null, r.customer), h("td", null, r.event), h("td", null, fmtDate(r.eventDate)),
-      h("td", null, panelSummary(r) || "—")));
+      h("td", null, panelSummary(r) || (r.kind === "new" ? h("span", { class: "warntag" }, "chybí detaily") : "—"))));
   }
   box.append(h("table", null, h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "ID"), h("th", null, "Zákazník"), h("th", null, "Akce"), h("th", null, "Datum akce"), h("th", null, "Panely"))), tb));
 }
@@ -1128,7 +1134,10 @@ async function saveImport() {
   if (res.detailsUpdated) parts.push(`doplněny detaily u ${res.detailsUpdated}`);
   const skipped = pending.length - res.created - (res.detailsUpdated || 0);
   if (skipped > 0) parts.push(`${skipped} ${plural(skipped, "duplicita přeskočena", "duplicity přeskočeny", "duplicit přeskočeno")}`);
-  toast((parts.join(", ") || "Nic se nezměnilo").replace(/^./, (c) => c.toUpperCase()) + ".");
+  const missingNew = rows.filter((r) => !docs.has(r.nexId) || !panelList(docs.get(r.nexId)).length).filter((r) => !(r.details || {})["Typ panelů"]);
+  const msg = (parts.join(", ") || "Nic se nezměnilo").replace(/^./, (c) => c.toUpperCase()) + ".";
+  if (missingNew.length) toast(`${msg} ${missingNew.length} ${plural(missingNew.length, "pronájem nemá", "pronájmy nemají", "pronájmů nemá")} detaily (panely), najdete je v Přehledu.`, 7000);
+  else toast(msg);
   $("#paste").value = ""; $("#preview").replaceChildren(); $("#importPanel").hidden = true;
   $("#btnImportSave").textContent = "Uložit pronájmy";
 }
@@ -1159,6 +1168,26 @@ function openAdd() { view = "list"; render(); $("#addPanel").hidden = false; $("
 
 /* ---------- views ---------- */
 function greeting() { const hr = new Date().getHours(); return hr < 10 ? "Dobré ráno" : hr < 18 ? "Dobrý den" : "Dobrý večer"; }
+
+function missingDetailsCard(all) {
+  if (!isAdmin()) return null;
+  const list = all.filter(needsDetails).sort((a, b) => String(a.eventDate).localeCompare(String(b.eventDate)) || Number(a.nexId) - Number(b.nexId));
+  if (!list.length) return null;
+  const ids = list.map((r) => r.nexId).join(", ");
+  return h("section", { class: "card missing-card" },
+    h("div", { class: "card-h" },
+      h("h3", null, icon("alert", 19), `Doplňte detaily z NEXu · ${list.length}`),
+      h("div", { class: "row-actions" },
+        h("button", { class: "btn ghost", type: "button", onclick: () => copy(ids) }, icon("copy", 15), "Zkopírovat čísla"),
+        h("a", { class: "btn", href: NEX_LIST_URL, target: "_blank", rel: "noopener noreferrer" }, icon("ext", 15), "Otevřít NEX"),
+        h("button", { class: "btn ghost", type: "button", onclick: () => { view = "list"; period = "active"; statFilter = "nodetails"; render(); } }, "Vše", icon("chev", 16)))),
+    h("p", { class: "hint" }, "Těmto pronájmům chybí panely. V NEXu rozbalte šipkou ▶ jen je, zkopírujte a vložte přes „Vložit z NEXu“. Detaily se doplní."),
+    h("div", { class: "mini" }, list.slice(0, 6).map((r) => h("button", { type: "button", onclick: () => openDrawer(r.id) },
+      calTile(r),
+      h("div", { class: "t" }, h("strong", null, r.event || "Bez názvu akce"), h("span", null, `#${r.nexId} · ${r.customer}`)),
+      h("span", { class: "warntag" }, "chybí detaily")))),
+    list.length > 6 ? h("p", { class: "hint" }, `a dalších ${list.length - 6}, všechny čísla: ${ids}`) : null);
+}
 
 function renderOverview(all) {
   const active = all.filter((r) => !isPast(r));
@@ -1251,7 +1280,7 @@ function renderOverview(all) {
       h("div", null, h("p", { class: "eyebrow" }, new Date().toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })),
         h("h1", null, `${greeting()}, ${u.name.split(" ")[0]}`),
         h("p", null, urgent.length ? `${urgent.length} ${plural(urgent.length, "pronájem potřebuje", "pronájmy potřebují", "pronájmů potřebuje")} pozornost do ${URGENT_DAYS} dnů.` : "Všechno v nejbližších dnech je v pořádku."))),
-    hero, stats, h("div", { class: "cols" }, attention, feed)];
+    hero, stats, missingDetailsCard(all), h("div", { class: "cols" }, attention, feed)];
 }
 
 const PERIODS = [
@@ -1265,6 +1294,7 @@ const SFILTERS = [
   { id: "self", label: "Nahrává klient", k: "var(--violet)", ks: "var(--violet-soft)", test: (r) => statusOf(r) === "self" },
   { id: "done", label: "Na panelech", k: "var(--green)", ks: "var(--green-soft)", test: (r) => statusOf(r) === "done" },
   { id: "urgent", label: "Blíží se termín", k: "var(--accent)", ks: "var(--accent-soft)", test: isUrgent },
+  { id: "nodetails", label: "Chybí detaily", k: "var(--amber)", ks: "var(--amber-soft)", test: needsDetails, adminOnly: true },
 ];
 function renderList(all) {
   const pdef = PERIODS.find((p) => p.id === period);
@@ -1280,7 +1310,7 @@ function renderList(all) {
 
   const toolbar = h("div", { class: "toolbar" },
     h("div", { class: "seg", role: "group", "aria-label": "Období" }, PERIODS.map((p) => h("button", { type: "button", "aria-pressed": String(period === p.id), onclick: () => { period = p.id; render(); } }, p.label))),
-    h("div", { class: "chips" }, SFILTERS.map((s) => h("button", { class: "chip", type: "button", style: `--k:${s.k};--ks:${s.ks}`, "aria-pressed": String(statFilter === s.id),
+    h("div", { class: "chips" }, SFILTERS.filter((s) => !s.adminOnly || isAdmin()).map((s) => h("button", { class: "chip", type: "button", style: `--k:${s.k};--ks:${s.ks}`, "aria-pressed": String(statFilter === s.id),
       onclick: () => { statFilter = statFilter === s.id ? null : s.id; render(); } }, h("i"), s.label, h("b", null, inPeriod.filter(s.test).length)))),
     searchBox);
 
@@ -1322,7 +1352,7 @@ function fillTickets(el, shown) {
     el.append(h("button", { class: "ticket" + (isUrgent(r) ? " urgent" : ""), type: "button", onclick: () => openDrawer(r.id) },
       calTile(r),
       h("div", { class: "ttl" },
-        h("span", { class: "id" }, `#${r.nexId}`, newIds.has(r.id) ? h("span", { class: "newtag" }, "Nový") : null, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
+        h("span", { class: "id" }, `#${r.nexId}`, newIds.has(r.id) ? h("span", { class: "newtag" }, "Nový") : null, isAdmin() && needsDetails(r) ? h("span", { class: "warntag" }, "chybí detaily") : null, isUrgent(r) ? h("span", { class: "urg" }, "blíží se termín") : null),
         h("strong", null, r.event || "Bez názvu akce"),
         h("span", null, r.customer + (r.selfUpload ? " · nahrává klient sám" : contentCount(r) ? ` · ${contentCount(r)}` : "") + noteCount(r)),
         panelSummary(r) ? h("span", { class: "pnl" }, icon("screen", 14), h("span", null, panelSummary(r))) : null),
@@ -1507,7 +1537,10 @@ function techSection(r, admin) {
   return h("section", null, head,
     panels.length
       ? h("div", { class: "panelchips" }, panels.map((p) => h("span", { class: "panelchip" }, icon("screen", 16), p)))
-      : h("div", { class: "empty-files", style: "padding:14px;margin-bottom:12px" }, admin ? "Panely zatím nejsou zadané. Doplníte je tlačítkem Upravit, nebo importem rozbalených řádků z NEXu." : "Panely zatím nejsou zadané."),
+      : h("div", { class: "empty-files", style: "padding:14px;margin-bottom:12px" }, admin
+        ? h("span", null, `Chybí detaily z NEXu. V NEXu rozbalte pronájem #${r.nexId}, zkopírujte ho a vložte přes „Vložit z NEXu“, nebo panely zadejte tlačítkem Upravit. `,
+            h("a", { href: NEX_LIST_URL, target: "_blank", rel: "noopener noreferrer", style: "color:var(--accent);font-weight:600" }, "Otevřít NEX"))
+        : "Panely zatím nejsou zadané."),
     keys.length ? h("dl", { class: "info" }, keys.flatMap((k) => [h("dt", null, k), h("dd", null, val(d[k]))])) : null,
     d["Vzkaz pro technika"] ? h("div", { class: "techmsg" }, h("b", null, "Vzkaz pro technika"), d["Vzkaz pro technika"]) : null);
 }
