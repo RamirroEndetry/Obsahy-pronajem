@@ -1168,6 +1168,11 @@ function openAdd() { view = "list"; render(); $("#addPanel").hidden = false; $("
 
 /* ---------- views ---------- */
 function greeting() { const hr = new Date().getHours(); return hr < 10 ? "Dobré ráno" : hr < 18 ? "Dobrý den" : "Dobrý večer"; }
+function salutation(name) {
+  const firstName = String(name || "").trim().split(/\s+/)[0];
+  const vocatives = { "Jiří": "Jiří", "Kuba": "Kubo", "Pavla": "Pavlo", "Honza": "Honzo" };
+  return Object.hasOwn(vocatives, firstName) ? vocatives[firstName] : "";
+}
 
 function missingDetailsCard(all) {
   if (!isAdmin()) return null;
@@ -1278,7 +1283,7 @@ function renderOverview(all) {
   return [
     h("header", { class: "pagehead" },
       h("div", null, h("p", { class: "eyebrow" }, new Date().toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })),
-        h("h1", null, `${greeting()}, ${u.name.split(" ")[0]}`),
+        h("h1", null, greeting() + (salutation(u.name) ? `, ${salutation(u.name)}` : "")),
         h("p", null, urgent.length ? `${urgent.length} ${plural(urgent.length, "pronájem potřebuje", "pronájmy potřebují", "pronájmů potřebuje")} pozornost do ${URGENT_DAYS} dnů.` : "Všechno v nejbližších dnech je v pořádku."))),
     hero, stats, missingDetailsCard(all), h("div", { class: "cols" }, attention, feed)];
 }
